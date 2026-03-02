@@ -8,11 +8,11 @@ There's too many project-specific settings here, so it's not worth the effort.
 */
 
 #+feature dynamic-literals
+#+feature using-stmt
 package build
 
 import path "core:path/filepath"
 import "core:fmt"
-import "core:os/os2"
 import "core:os"
 import "core:strings"
 import "core:log"
@@ -44,7 +44,7 @@ main :: proc() {
 	game_kind:= Game_Kind.full
 
 	release, debug : bool
-	for arg in os2.args {
+	for arg in os.args {
 		switch arg {
 			case "release": release = true
 			case "debug": debug = true
@@ -136,8 +136,6 @@ main :: proc() {
 		"sokol_odin",
 	)
 
-	wd := os.get_current_directory()
-
 	//utils.make_directory_if_not_exist("build")
 
 	out_dir: string
@@ -151,14 +149,18 @@ main :: proc() {
 
 	// delete the build folder if it's release mode, that way we clean shit up
 	if release {
-		err := os2.remove_all(out_dir)
+		err := os.remove_all(out_dir)
 		if err != nil {
 			log.error(err)
 			return
 		}
 	}
 
-	full_out_dir_path := path.join({wd, out_dir})
+	full_out_dir_path, path_err := os.get_absolute_path(out_dir, context.temp_allocator)
+	if path_err != nil {
+		log.error(path_err)
+		return
+	}
 	log.info(full_out_dir_path)
 	utils.make_directory_if_not_exist(full_out_dir_path)
 
@@ -208,7 +210,7 @@ main :: proc() {
 			//assert(os.exists(dir), fmt.tprint("directory doesn't exist:", dir, file_name))
 			dest := fmt.tprintf("%v/%v", out_dir, file_name)
 			if !os.exists(dest) {
-				os2.copy_file(dest, src)
+				os.copy_file(dest, src)
 			}
 		}
 	}

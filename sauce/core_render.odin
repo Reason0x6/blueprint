@@ -1,3 +1,4 @@
+#+feature using-stmt
 package main
 
 import "utils"
@@ -211,8 +212,8 @@ load_sprites_into_atlas :: proc() {
 		if img_name == .nil do continue
 		
 		path := fmt.tprint(img_dir, img_name, ".png", sep="")
-		png_data, succ := os.read_entire_file(path)
-		assert(succ, fmt.tprint(path, "not found"))
+		png_data, png_err := os.read_entire_file_from_path(path, context.temp_allocator)
+		assert(png_err == nil, fmt.tprint(path, "not found"))
 		
 		stbi.set_flip_vertically_on_load(1)
 		width, height, channels: i32
@@ -324,7 +325,7 @@ load_font :: proc() {
 	bitmap, _ := mem.alloc(font_bitmap_w * font_bitmap_h)
 	font_height := 15 // for some reason this only bakes properly at 15 ? it's a 16px font dou...
 	path := "res/fonts/alagard.ttf" // #user
-	ttf_data, err := os.read_entire_file(path)
+	ttf_data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	assert(ttf_data != nil, "failed to read font")
 	
 	ret := BakeFontBitmap(raw_data(ttf_data), 0, auto_cast font_height, auto_cast bitmap, font_bitmap_w, font_bitmap_h, 32, char_count, &font.char_data[0])

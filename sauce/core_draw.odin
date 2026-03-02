@@ -72,8 +72,7 @@ draw_sprite :: proc(
 ) {
 
 	rect_size := get_sprite_size(sprite)
-	frame_count := get_frame_count(sprite)
-	rect_size.x /= f32(frame_count)
+	rect_size.x = get_frame_width_px_for_sprite(sprite, anim_index, rect_size.x)
 
 	/* this was the old one
 	
@@ -91,7 +90,8 @@ draw_sprite :: proc(
 	xform0 *= utils.xform_scale(Vec2{flip_x ? -1.0 : 1.0, 1.0})
 	xform0 *= xform
 	xform0 *= utils.xform_translate(rect_size * -utils.scale_from_pivot(pivot)) // pivot offset
-	xform0 *= utils.xform_translate(-draw_offset) // extra draw offset for nudging into the desired pivot
+	frame_center_offset := get_anim_frame_center_offset(sprite, anim_index)
+	xform0 *= utils.xform_translate(-(draw_offset + frame_center_offset)) // extra draw offset for nudging into the desired pivot
 
 	/*
 	xform := xform
@@ -239,16 +239,7 @@ draw_rect_xform :: proc(
 	uv := uv
 	if uv == DEFAULT_UV {
 		uv = atlas_uv_from_sprite(sprite)
-
-		// animation UV hack
-		// we assume all animations are just a long strip
-		frame_count := get_frame_count(sprite)
-		frame_size := size
-		frame_size.x /= f32(frame_count)
-		uv_size := shape.rect_size(uv)
-		uv_frame_size := uv_size * Vec2{frame_size.x/size.x, 1.0}
-		uv.zw = uv.xy + uv_frame_size
-		uv = shape.rect_shift(uv, Vec2{f32(anim_index)*uv_frame_size.x, 0})
+		uv = get_anim_frame_uv(sprite, uv, anim_index)
 	}
 
 	//
