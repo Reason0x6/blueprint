@@ -316,6 +316,11 @@ Sprite_Name :: enum {
 	forest_grass_texture,
 	desert_bg_tile,
 	plains_bg_tile,
+	plains_0,
+	plains_1,
+	plains_2,
+	plains_3,
+	plains_4,
 	forest_bg_tile,
 	ruins_bg_tile,
 	grass,
@@ -1226,16 +1231,40 @@ get_biome_for_chunk :: proc(chunk_x: int, chunk_y: int) -> Biome_Kind {
 	return .ruins
 }
 
-biome_tile_sprite :: proc(biome: Biome_Kind) -> Sprite_Name {
+sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
+	size := get_sprite_size(sprite)
+	return size.x > 0 && size.y > 0
+}
+
+pick_loaded_variant :: proc(seed: u64, variants: []Sprite_Name) -> Sprite_Name {
+	available := make([dynamic]Sprite_Name, 0, len(variants), allocator=context.temp_allocator)
+	for s in variants {
+		if sprite_is_loaded(s) {
+			append(&available, s)
+		}
+	}
+	if len(available) == 0 {
+		return .nil
+	}
+
+	r := random01_from_seed(seed)
+	idx := clamp(int(r * f32(len(available))), 0, len(available)-1)
+	return available[idx]
+}
+
+biome_tile_sprite :: proc(biome: Biome_Kind, tile_x: int, tile_y: int) -> Sprite_Name {
+	seed := u64(i64(tile_x)*92837111 + i64(tile_y)*689287499)
+	seed = seed ~ 0xC2B2AE3D27D4EB4F
+
 	#partial switch biome {
 	case .desert:
-		return .desert_bg_tile
+		return pick_loaded_variant(seed, []Sprite_Name{.desert_bg_tile})
 	case .plains:
-		return .plains_bg_tile
+		return pick_loaded_variant(seed, []Sprite_Name{.plains_bg_tile, .plains_0, .plains_1, .plains_2, .plains_3, .plains_4})
 	case .forest:
-		return .forest_bg_tile
+		return pick_loaded_variant(seed, []Sprite_Name{.forest_bg_tile})
 	case .ruins:
-		return .ruins_bg_tile
+		return pick_loaded_variant(seed, []Sprite_Name{.ruins_bg_tile})
 	}
 	return .nil
 }
@@ -1431,9 +1460,8 @@ draw_world_biome_tiles :: proc() {
 			biome := get_biome_for_chunk(chunk_x, chunk_y)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 
-			biome_sprite := biome_tile_sprite(biome)
-			biome_sprite_size := get_sprite_size(biome_sprite)
-			if biome_sprite != .nil && biome_sprite_size.x > 0 && biome_sprite_size.y > 0 {
+			biome_sprite := biome_tile_sprite(biome, tx, ty)
+			if biome_sprite != .nil {
 				draw_sprite_in_rect(biome_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
 			} else {
 				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
