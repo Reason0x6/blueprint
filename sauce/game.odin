@@ -821,9 +821,9 @@ game_update :: proc() {
 		tree := entity_create(.tree_ent)
 		tree.pos = Vec2{26, 0}
 		sapling := entity_create(.sapling_ent)
-		sapling.pos = Vec2{8, 4}
+		sapling.pos =Vec2{-40, 0}
 		sprout := entity_create(.sprout_ent)
-		sprout.pos = Vec2{-20, 4}
+		sprout.pos = Vec2{-80, 0}
 
 		spawn_item_pickup(.wood, 4, Vec2{-68, 8})
 		spawn_item_pickup(.stone, 3, Vec2{-86, 8})
@@ -1079,9 +1079,9 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		center := e.pos + Vec2{0, -51}
 		return shape.rect_make(center, Vec2{50, 20}, pivot=.bottom_center), true
 	case .sapling_ent:
-		return shape.rect_make(e.pos + Vec2{0, -7}, Vec2{12, 8}, pivot=.bottom_center), true
+		return shape.rect_make(e.pos + Vec2{0, -13}, Vec2{18, 13}, pivot=.bottom_center), true
 	case .sprout_ent:
-		return shape.rect_make(e.pos + Vec2{0, -4}, Vec2{8, 6}, pivot=.bottom_center), true
+		return shape.rect_make(e.pos + Vec2{0, -8}, Vec2{15, 10}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -2450,7 +2450,7 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	kind = .sprout_ent
 	sprite = .sprout
 	draw_pivot = .center_center
-	blocks_player = false
+	blocks_player = true
 
 	e.update_proc = proc(_: ^Entity) {}
 	e.draw_proc = proc(e: Entity) {

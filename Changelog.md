@@ -1,6 +1,9 @@
 # Changelog
 
-## [HEAD] Map stone and rope items to their new texture sprites
+## [HEAD] Enable player collision for sprout entities
+- Changed `setup_sprout_ent` so `sprout_ent` now sets `blocks_player = true`, making sprouts collide with and block player movement.
+
+## [bae4fc8] Map stone and rope items to their new texture sprites
 - Added `stone` and `rope` sprite ids in `Sprite_Name`/`sprite_data` so they load from `res/images/stone.png` and `res/images/rope.png`.
 - Updated `item_icon_sprite` to return `.stone` for `Item_Kind.stone` and `.rope` for `Item_Kind.rope` instead of placeholder sprites.
 
