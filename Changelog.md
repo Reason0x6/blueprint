@@ -1,6 +1,10 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Player movement now checks full player-hitbox occupancy before applying WASD or click-to-move steps, so structure water collision blocks movement immediately instead of only reverting after overlap.
+- Added shared player auto-move cancel handling when movement is blocked by water/entity hitboxes.
+
+## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
 
 ## [aed2934] Add active pause menu overlay with global ESC open/close behavior

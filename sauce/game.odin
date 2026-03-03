@@ -3552,6 +3552,42 @@ is_world_position_blocked_for_player :: proc(pos: Vec2) -> bool {
 	return false
 }
 
+is_player_hitbox_blocked_at_pos :: proc(player: ^Entity, pos: Vec2) -> bool {
+	probe := player^
+	probe.pos = pos
+	player_hitbox, ok := get_entity_hitbox_rect(probe)
+	if !ok {
+		return false
+	}
+
+	if is_rect_touching_water_collision(player_hitbox) {
+		return true
+	}
+
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		if !e.blocks_player do continue
+		if e.handle.id == player.handle.id do continue
+
+		blocker_hitbox, blocker_ok := get_entity_hitbox_rect(e^)
+		if !blocker_ok do continue
+		hit, _ := rounded_hitbox_collide_rect(player_hitbox, blocker_hitbox, HITBOX_CORNER_CUT)
+		if hit {
+			return true
+		}
+	}
+
+	return false
+}
+
+cancel_player_auto_move :: proc(player: ^Entity) {
+	player.has_move_target = false
+	player.has_queued_move_target = false
+	player.queued_move_target = {}
+	player.has_pending_interact = false
+	player.pending_interact = {}
+}
+
 despawn_dagger_projectile :: proc(e: ^Entity) {
 	added := inventory_add_item(&ctx.gs.inventory, .dagger_item, 1)
 	if added < 1 {
@@ -3782,34 +3818,21 @@ setup_player :: proc(e: ^Entity) {
 		if !is_any_ui_overlay_open() {
 			move_dir = get_input_vector()
 			if move_dir != {} {
-				e.has_move_target = false
-				e.has_queued_move_target = false
-				e.queued_move_target = {}
-				e.has_pending_interact = false
-				e.pending_interact = {}
+				cancel_player_auto_move(e)
 				e.has_pending_place = false
 				e.pending_place_item = .nil
-				e.pos += move_dir * PLAYER_MOVE_SPEED * ctx.delta_t
+				move_step := move_dir * PLAYER_MOVE_SPEED * ctx.delta_t
+				next_pos := e.pos + move_step
+				if !is_player_hitbox_blocked_at_pos(e, next_pos) {
+					e.pos = next_pos
+				} else {
+					move_dir = {}
+				}
 			} else if e.has_move_target {
 				to_target := e.move_target - e.pos
 				dist_sq := to_target.x*to_target.x + to_target.y*to_target.y
 				if dist_sq <= 2.0*2.0 {
-					e.pos = e.move_target
-					if e.has_queued_move_target {
-						e.move_target = e.queued_move_target
-						e.has_move_target = true
-						e.has_queued_move_target = false
-						e.queued_move_target = {}
-					} else {
-						e.has_move_target = false
-						try_interact_pending_target(e)
-					}
-				} else {
-					dist := math.sqrt(dist_sq)
-					move_dir = to_target / dist
-					move_step := move_dir * PLAYER_MOVE_SPEED * ctx.delta_t
-					step_len := linalg.length(move_step)
-					if step_len > dist {
+					if !is_player_hitbox_blocked_at_pos(e, e.move_target) {
 						e.pos = e.move_target
 						if e.has_queued_move_target {
 							e.move_target = e.queued_move_target
@@ -3821,7 +3844,36 @@ setup_player :: proc(e: ^Entity) {
 							try_interact_pending_target(e)
 						}
 					} else {
-						e.pos += move_step
+						cancel_player_auto_move(e)
+					}
+				} else {
+					dist := math.sqrt(dist_sq)
+					move_dir = to_target / dist
+					move_step := move_dir * PLAYER_MOVE_SPEED * ctx.delta_t
+					step_len := linalg.length(move_step)
+					if step_len > dist {
+						if !is_player_hitbox_blocked_at_pos(e, e.move_target) {
+							e.pos = e.move_target
+							if e.has_queued_move_target {
+								e.move_target = e.queued_move_target
+								e.has_move_target = true
+								e.has_queued_move_target = false
+								e.queued_move_target = {}
+							} else {
+								e.has_move_target = false
+								try_interact_pending_target(e)
+							}
+						} else {
+							cancel_player_auto_move(e)
+						}
+					} else {
+						next_pos := e.pos + move_step
+						if !is_player_hitbox_blocked_at_pos(e, next_pos) {
+							e.pos = next_pos
+						} else {
+							cancel_player_auto_move(e)
+							move_dir = {}
+						}
 					}
 				}
 			}
