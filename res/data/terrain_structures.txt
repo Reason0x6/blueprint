@@ -1,13 +1,14 @@
 # Terrain structures are parsed in declaration order and assigned to chunks in deterministic order.
 # Tokens:
 # - 1..54 => tileset block index from Tilemap_color1
-# - water => water.png tile
+# - 0 => water.png tile
 # - _ or empty => empty tile
 
 island_1 = [
   [11, 11, 11, 20, 20, 20, 11, 11, 20, 20, 20, 11],
-  [11, 11, 12, "water", "water", "water", 10, 21, "water", "water", "water", 10],
-  [11,  7,  7,  7,  2,  2, 12, "water", "water", "water", "water", 10],
-  [ 5, "water", "water", "water", 11, 11, 12, "water", "water", "water", "water", 10],
-  [11, 11, 12, "water", 19, 20, 21, "water", "water", "water", "water", 10]
+  [11, 20, 21, 0, 0, 0, 10, 21, 0, 0, 0, 10],
+  [12,  0,  0,  0,  1,  2, 12, 0, 0, 0, 0, 10],
+  [12, 0, 0, 0, 10, 11, 12, 0, 0, 0, 0, 10],
+  [12, 0, 0, 0, 19, 20, 21, 0, 0, 0, 0, 10],
+  [11, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 11]
 ]

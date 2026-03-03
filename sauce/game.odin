@@ -1517,9 +1517,19 @@ setup_terrain_block_hitboxes :: proc() {
 	clear_terrain_block_hitboxes()
 
 	// Flat ground: no collision.
+	set_terrain_block_hitbox(1, Vec2{0, 32}, Vec2{32,2})
+	add_terrain_block_hitbox(1, Vec2{0, 0}, Vec2{2,32})
 	set_terrain_block_hitbox(2, Vec2{0, 32}, Vec2{32,2})
+	set_terrain_block_hitbox(3, Vec2{0, 32}, Vec2{32,2})
+	add_terrain_block_hitbox(3, Vec2{32, 0}, Vec2{2,32})
+	set_terrain_block_hitbox(10, Vec2{0, 0}, Vec2{2,32})
 	set_terrain_block_hitbox(11, {}, {})
+	set_terrain_block_hitbox(12, Vec2{32, 0}, Vec2{2,32})
+	set_terrain_block_hitbox(19, Vec2{0, 0}, Vec2{32,2})
+	add_terrain_block_hitbox(19, Vec2{0, 0}, Vec2{2,32})
 	set_terrain_block_hitbox(20, Vec2{0, 0}, Vec2{32,2})
+	set_terrain_block_hitbox(21, Vec2{0, 0}, Vec2{32,2})
+	add_terrain_block_hitbox(21, Vec2{32, 0}, Vec2{2,32})
 
 	// Default blocking examples for cliff/wall row in the Tiny Swords 9x6 layout.
 	// Edit these definitions per block index to match your intended terrain collision.
