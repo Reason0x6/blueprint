@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Speed up durability regeneration and shorten regen delay
+## [HEAD] Boost hit flash effect when durability is below 3
+- Increased white hit-flash intensity and outline thickness for low-durability entities (`durability < 3`).
+- Slowed hit-flash fade-out at low durability so the stronger effect is visible longer.
+- Further increased low-durability flash strength with a higher alpha multiplier, slower decay, and added diagonal outline passes.
+
+## [cb1807b] Speed up durability regeneration and shorten regen delay
 - Increased durability regeneration rate from `1.0` to `2.0` per second.
 - Reduced post-hit regeneration delay from `1.0s` to `0.5s` so regen starts sooner.
 

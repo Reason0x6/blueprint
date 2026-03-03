@@ -82,6 +82,9 @@ ITEM_DROP_BOUNCE_DRAG: f32 : 6.5
 ITEM_DROP_PICKUP_DELAY_SEC: f64 : 0.25
 HIT_FLASH_DURATION_SEC: f32 : 0.12
 HIT_DROP_MAX_FROM_EDGE: f32 : 40
+LOW_DURABILITY_FLASH_THRESHOLD :: 3
+LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
+LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 
 Item_Kind :: enum u8 {
 	nil,
@@ -2147,7 +2150,11 @@ update_entity_hit_flash :: proc(e: ^Entity) {
 		return
 	}
 
-	e.hit_flash.a -= ctx.delta_t / HIT_FLASH_DURATION_SEC
+	decay := ctx.delta_t / HIT_FLASH_DURATION_SEC
+	if e.durability > 0 && e.durability < LOW_DURABILITY_FLASH_THRESHOLD {
+		decay *= LOW_DURABILITY_FLASH_DECAY_MULT
+	}
+	e.hit_flash.a -= decay
 	if e.hit_flash.a < 0 {
 		e.hit_flash.a = 0
 	}
@@ -2436,11 +2443,25 @@ draw_entity_default :: proc(e: Entity) {
 	}
 
 	if e.hit_flash.a > 0 {
-		outline_col := Vec4{1, 1, 1, e.hit_flash.a}
+		outline_alpha := e.hit_flash.a
+		if e.durability > 0 && e.durability < LOW_DURABILITY_FLASH_THRESHOLD {
+			outline_alpha = min(1.0, outline_alpha * LOW_DURABILITY_FLASH_ALPHA_MULT)
+		}
+		outline_col := Vec4{1, 1, 1, outline_alpha}
 		draw_sprite(e.pos + Vec2{1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		draw_sprite(e.pos + Vec2{-1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		draw_sprite(e.pos + Vec2{0, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		draw_sprite(e.pos + Vec2{0, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		if e.durability > 0 && e.durability < LOW_DURABILITY_FLASH_THRESHOLD {
+			draw_sprite(e.pos + Vec2{2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{-2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{0, 2}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{0, -2}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{-1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{-1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		}
 	}
 
 	draw_sprite_entity(&e, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot, col=entity_col)
@@ -2806,7 +2827,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 	sprite = .oblisk_rest
 	draw_pivot = .center_center
 	blocks_player = true
-	set_entity_durability(e, 8)
+	set_entity_durability(e, 800)
 	break_drop_item = .oblisk_fragment
 	break_drop_count = 1
 	on_hit_proc = entity_on_hit_noop
