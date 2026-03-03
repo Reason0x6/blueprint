@@ -1488,7 +1488,8 @@ terrain_tile_for_tile :: proc(tile_x: int, tile_y: int) -> Terrain_Tile {
 		}
 
 		rel_x := tile_x - inst.origin_tile_x
-		rel_y := tile_y - inst.origin_tile_y
+		// Structures are indexed top->bottom, left->right from origin.
+		rel_y := inst.origin_tile_y - tile_y
 		if rel_x < 0 || rel_y < 0 || rel_x >= st.cols || rel_y >= st.rows {
 			continue
 		}
