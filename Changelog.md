@@ -1,6 +1,9 @@
 # Changelog
 
-## [HEAD] Add delayed durability regeneration for entities after hits
+## [HEAD] Double entity durability regeneration speed
+- Increased durability regeneration rate from `0.5` to `1.0` durability per second while keeping the 1-second post-hit delay.
+
+## [2970ee5] Add delayed durability regeneration for entities after hits
 - Added per-entity durability regeneration state (`durability_max`, `last_hit_time`, regen accumulator) and per-frame regen updates.
 - Entities now wait 1 second after being hit before regenerating missing durability gradually over time.
 - Added setup helper wiring so durability/max values remain setup-defined while supporting regeneration behavior.
