@@ -203,6 +203,13 @@ Water_Collision_Mask :: struct {
 }
 water_collision_mask: Water_Collision_Mask
 
+Terrain_Block_Hitbox :: struct {
+	enabled: bool,
+	offset: Vec2,
+	size: Vec2,
+}
+terrain_block_hitboxes: [TERRAIN_MAX_BLOCK_INDEX+1]Terrain_Block_Hitbox
+
 //
 // action -> key mapping
 
@@ -972,8 +979,8 @@ load_water_collision_mask :: proc() {
 		append(&alpha, a)
 	}
 
-	water_collision_mask.width = int(width)
-	water_collision_mask.height = int(height)
+	water_collision_mask.width = int(width+14)
+	water_collision_mask.height = int(height+14)
 	water_collision_mask.alpha = alpha
 }
 
@@ -1048,6 +1055,7 @@ app_init :: proc() {
 	load_crafting_recipes()
 	load_terrain_structures()
 	load_water_collision_mask()
+	setup_terrain_block_hitboxes()
 }
 
 app_frame :: proc() {
@@ -1364,6 +1372,7 @@ game_draw :: proc() {
 
 		if ctx.gs.debug_show_hitboxes {
 			draw_water_collision_debug()
+			draw_terrain_block_collision_debug()
 			for handle in get_all_ents() {
 				e := entity_from_handle(handle)
 				draw_entity_hitbox_debug(e^)
@@ -1464,6 +1473,40 @@ TERRAIN_TILESET_BLOCK_ROWS :: 6
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
 
+clear_terrain_block_hitboxes :: proc() {
+	for i in 0..=TERRAIN_MAX_BLOCK_INDEX {
+		terrain_block_hitboxes[i] = {}
+	}
+}
+
+set_terrain_block_hitbox :: proc(block_index: int, offset: Vec2, size: Vec2) {
+	if block_index < 1 || block_index > TERRAIN_MAX_BLOCK_INDEX {
+		return
+	}
+	if size.x <= 0 || size.y <= 0 {
+		terrain_block_hitboxes[block_index] = {}
+		return
+	}
+	terrain_block_hitboxes[block_index] = Terrain_Block_Hitbox{
+		enabled = true,
+		offset = offset,
+		size = size,
+	}
+}
+
+setup_terrain_block_hitboxes :: proc() {
+	clear_terrain_block_hitboxes()
+
+	// Flat ground: no collision.
+	set_terrain_block_hitbox(11, {}, {})
+
+	// Default blocking examples for cliff/wall row in the Tiny Swords 9x6 layout.
+	// Edit these definitions per block index to match your intended terrain collision.
+	for block in 46..=54 {
+		set_terrain_block_hitbox(block, Vec2{0, 0}, Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE})
+	}
+}
+
 positive_mod_int :: proc(v: int, m: int) -> int {
 	if m <= 0 do return 0
 	r := v % m
@@ -1552,6 +1595,37 @@ is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
 	return tile.kind == .block && tile.block_index > 0
 }
 
+get_terrain_block_hitbox_rect :: proc(tile_x: int, tile_y: int) -> (shape.Rect, bool) {
+	tile := terrain_tile_for_tile(tile_x, tile_y)
+	if tile.kind != .block || tile.block_index <= 0 || tile.block_index > TERRAIN_MAX_BLOCK_INDEX {
+		return {}, false
+	}
+
+	cfg := terrain_block_hitboxes[tile.block_index]
+	if !cfg.enabled || cfg.size.x <= 0 || cfg.size.y <= 0 {
+		return {}, false
+	}
+
+	tile_min := Vec2{f32(tile_x) * ENTITY_GRID_SIZE, f32(tile_y) * ENTITY_GRID_SIZE}
+	rect := shape.Rect{
+		tile_min.x + cfg.offset.x,
+		tile_min.y + cfg.offset.y,
+		tile_min.x + cfg.offset.x + cfg.size.x,
+		tile_min.y + cfg.offset.y + cfg.size.y,
+	}
+	return rect, true
+}
+
+is_world_pos_in_terrain_block_collision :: proc(pos: Vec2) -> bool {
+	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
+	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
+	rect, ok := get_terrain_block_hitbox_rect(tile_x, tile_y)
+	if !ok {
+		return false
+	}
+	return shape.rect_contains(rect, pos)
+}
+
 is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> bool {
 	tile := terrain_tile_for_tile(tile_x, tile_y)
 	if tile.kind != .water {
@@ -1605,6 +1679,30 @@ is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
 	return false
 }
 
+is_rect_touching_terrain_block_collision :: proc(rect: shape.Rect) -> bool {
+	min_tile_x := int(math.floor(rect.x / ENTITY_GRID_SIZE))
+	max_tile_x := int(math.floor(rect.z / ENTITY_GRID_SIZE))
+	min_tile_y := int(math.floor(rect.y / ENTITY_GRID_SIZE))
+	max_tile_y := int(math.floor(rect.w / ENTITY_GRID_SIZE))
+
+	ty := min_tile_y
+	for ty <= max_tile_y {
+		tx := min_tile_x
+		for tx <= max_tile_x {
+			block_rect, block_ok := get_terrain_block_hitbox_rect(tx, ty)
+			if block_ok {
+				hit, _ := rounded_hitbox_collide_rect(rect, block_rect, HITBOX_CORNER_CUT)
+				if hit {
+					return true
+				}
+			}
+			tx += 1
+		}
+		ty += 1
+	}
+	return false
+}
+
 draw_water_collision_debug :: proc() {
 	tile_size := Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}
 	center := ctx.gs.cam_pos
@@ -1625,6 +1723,31 @@ draw_water_collision_debug :: proc() {
 				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
 				draw_rect(tile_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.75, 1.0, 0.85}, z_layer=.top)
+			}
+			tx += 1
+		}
+		ty += 1
+	}
+}
+
+draw_terrain_block_collision_debug :: proc() {
+	tile_size := Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}
+	center := ctx.gs.cam_pos
+	half_w := f32(GAME_RES_WIDTH)*0.5 + tile_size.x
+	half_h := f32(GAME_RES_HEIGHT)*0.5 + tile_size.y
+
+	min_tile_x := int(math.floor((center.x - half_w) / tile_size.x))
+	max_tile_x := int(math.ceil((center.x + half_w) / tile_size.x))
+	min_tile_y := int(math.floor((center.y - half_h) / tile_size.y))
+	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
+
+	ty := min_tile_y
+	for ty <= max_tile_y {
+		tx := min_tile_x
+		for tx <= max_tile_x {
+			rect, ok := get_terrain_block_hitbox_rect(tx, ty)
+			if ok {
+				draw_rect(rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1.0, 0.62, 0.2, 0.88}, z_layer=.top)
 			}
 			tx += 1
 		}
@@ -2208,9 +2331,9 @@ resolve_player_vs_hitboxes :: proc() {
 		if !collided_any do break
 	}
 
-	// Water collision is texture-accurate using water alpha mask sampling.
+	// Terrain collision fallback: water uses texture alpha, blocks use per-block hitbox config.
 	player_hitbox, ok = get_entity_hitbox_rect(player^)
-	if ok && is_rect_touching_water_collision(player_hitbox) {
+	if ok && (is_rect_touching_water_collision(player_hitbox) || is_rect_touching_terrain_block_collision(player_hitbox)) {
 		player.pos = prev_pos
 		player.has_move_target = false
 		player.has_queued_move_target = false
@@ -3538,6 +3661,9 @@ is_world_position_blocked_for_player :: proc(pos: Vec2) -> bool {
 	if is_world_pos_in_water_collision(pos) {
 		return true
 	}
+	if is_world_pos_in_terrain_block_collision(pos) {
+		return true
+	}
 
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
@@ -3561,6 +3687,9 @@ is_player_hitbox_blocked_at_pos :: proc(player: ^Entity, pos: Vec2) -> bool {
 	}
 
 	if is_rect_touching_water_collision(player_hitbox) {
+		return true
+	}
+	if is_rect_touching_terrain_block_collision(player_hitbox) {
 		return true
 	}
 
