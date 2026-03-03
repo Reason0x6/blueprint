@@ -1363,6 +1363,7 @@ game_draw :: proc() {
 		}
 
 		if ctx.gs.debug_show_hitboxes {
+			draw_water_collision_debug()
 			for handle in get_all_ents() {
 				e := entity_from_handle(handle)
 				draw_entity_hitbox_debug(e^)
@@ -1589,7 +1590,7 @@ is_world_pos_in_water_collision :: proc(pos: Vec2) -> bool {
 }
 
 is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
-	step := max(1.0, ENTITY_GRID_SIZE / 8.0)
+	step := 1.0
 	y := rect.y
 	for y <= rect.w {
 		x := rect.x
@@ -1602,6 +1603,33 @@ is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
 		y += step
 	}
 	return false
+}
+
+draw_water_collision_debug :: proc() {
+	tile_size := Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}
+	center := ctx.gs.cam_pos
+	half_w := f32(GAME_RES_WIDTH)*0.5 + tile_size.x
+	half_h := f32(GAME_RES_HEIGHT)*0.5 + tile_size.y
+
+	min_tile_x := int(math.floor((center.x - half_w) / tile_size.x))
+	max_tile_x := int(math.ceil((center.x + half_w) / tile_size.x))
+	min_tile_y := int(math.floor((center.y - half_h) / tile_size.y))
+	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
+
+	ty := min_tile_y
+	for ty <= max_tile_y {
+		tx := min_tile_x
+		for tx <= max_tile_x {
+			tile := terrain_tile_for_tile(tx, ty)
+			if tile.kind == .water {
+				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
+				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
+				draw_rect(tile_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.75, 1.0, 0.85}, z_layer=.top)
+			}
+			tx += 1
+		}
+		ty += 1
+	}
 }
 
 draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, world_rect: shape.Rect, col:=color.WHITE) {

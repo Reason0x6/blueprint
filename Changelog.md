@@ -48,6 +48,8 @@
 - Structure tile indexing now maps arrays as top-to-bottom and left-to-right from the structure origin (`row 0` is top row).
 - Terrain structure token parsing now accepts `0` as water in addition to `water`/`"water"`.
 - Added texture-accurate water collision: `water.png` alpha is loaded as a collision mask and player blocking now samples water pixels in world space (including path target checks and post-move hitbox rejection).
+- Water collision debug now renders visible tile outlines for terrain `water` tiles when hitbox debug is enabled, including structure-spawned water tiles.
+- Increased water collision sampling precision to per-pixel (`1px`) across actor hitbox tests so thin water-mask regions no longer miss blocking.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
