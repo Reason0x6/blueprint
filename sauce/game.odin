@@ -1225,11 +1225,21 @@ TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
 
+positive_mod_int :: proc(v: int, m: int) -> int {
+	if m <= 0 do return 0
+	r := v % m
+	if r < 0 {
+		r += m
+	}
+	return r
+}
+
 terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {
-	_ = tile_x
-	_ = tile_y
-	// Default terrain fill. Replace this selector when you want rules for other blocks.
-	return TERRAIN_DEFAULT_BLOCK_INDEX
+	// Step through 1..54 in row-major order across the world and wrap.
+	local_x := positive_mod_int(tile_x, BIOME_CHUNK_SIZE_TILES)
+	local_y := positive_mod_int(tile_y, BIOME_CHUNK_SIZE_TILES)
+	seq := local_x + local_y*BIOME_CHUNK_SIZE_TILES
+	return positive_mod_int(seq, TERRAIN_MAX_BLOCK_INDEX) + 1
 }
 
 is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
@@ -1442,6 +1452,7 @@ draw_world_terrain_tiles :: proc() {
 			if sprite_is_loaded(.tilemap_color1) {
 				draw_tileset_block_in_world_rect(.tilemap_color1, block_index, tile_rect, col=Vec4{1, 1, 1, 0.95})
 			}
+			draw_text(tile_center, fmt.tprintf("%v", block_index), pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
 			tx += 1
 		}
 		ty += 1
