@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add stone_multitool item support so existing recipe resolves
+## [HEAD] Add per-entity hit durability with tree on-hit wood drops and break drops
+- Added per-entity `durability`, `on_hit_proc`, and break-drop (`break_drop_item`, `break_drop_count`) fields to `Entity`, with values configured in each `setup_*` proc.
+- Added left-click world hit handling that applies entity hits, reduces durability by 1 per click, and destroys entities at 0 durability while dropping their configured break item.
+- Added tree-specific `on_hit_proc` that spawns `wood` with a 15% chance on each hit.
+
+## [c8504b4] Add stone_multitool item support so existing recipe resolves
 - Added `stone_multitool` to `Item_Kind` and token parsing so `stone_multitool:1` outputs in `crafting_recipes.txt` load correctly.
 - Added inventory/UI mappings (`item_name`, `item_icon_sprite`, `item_max_stack`) for the new item, using a stack size of `1`.
 

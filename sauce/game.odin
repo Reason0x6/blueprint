@@ -69,6 +69,7 @@ AUTO_PICKUP_RADIUS: f32 : 40
 DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
 ENTITY_GRID_SIZE: f32 : 4
 HITBOX_CORNER_CUT: f32 : 3
+TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 
 Item_Kind :: enum u8 {
 	nil,
@@ -174,7 +175,11 @@ Entity :: struct {
   loop: bool,
 	frame_duration: f32,
 	is_active: bool,
+	durability: int,
+	break_drop_item: Item_Kind,
+	break_drop_count: int,
 	blocks_player: bool,
+	on_hit_proc: proc(^Entity, ^Entity),
 	pickup_item: Item_Kind,
 	pickup_count: int,
 	vel: Vec2,
@@ -885,10 +890,10 @@ game_update :: proc() {
 	}
 
 	if key_pressed(.LEFT_MOUSE) {
-		consume_key_pressed(.LEFT_MOUSE)
-
 		pos := mouse_pos_in_current_space()
-		log.info("schloop at", pos)
+		_ = try_hit_entity_at_mouse(pos)
+
+		consume_key_pressed(.LEFT_MOUSE)
 		sound_play("event:/schloop", pos=pos)
 	}
 
@@ -1906,6 +1911,77 @@ spawn_movement_indicator :: proc(pos: Vec2) -> ^Entity {
 	return e
 }
 
+random01_from_seed :: proc(seed0: u64) -> f32 {
+	seed := seed0
+	seed = seed*6364136223846793005 + 1
+	r := u32((seed >> 32) & 0xFFFF_FFFF)
+	return f32(r) / 4294967295.0
+}
+
+roll_chance :: proc(chance: f32, salt: u64) -> bool {
+	if chance <= 0 {
+		return false
+	}
+	if chance >= 1 {
+		return true
+	}
+
+	t := u64(now() * 1000000.0)
+	seed := t + u64(ctx.gs.ticks)*1315423911 + salt*1099511628211
+	return random01_from_seed(seed) < chance
+}
+
+entity_on_hit_noop :: proc(_: ^Entity, _: ^Entity) {}
+
+entity_on_hit_tree :: proc(target: ^Entity, _: ^Entity) {
+	if roll_chance(TREE_WOOD_HIT_DROP_CHANCE, u64(target.handle.id)) {
+		spawn_item_pickup(.wood, 1, target.pos + Vec2{0, 8})
+	}
+}
+
+entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
+	if !is_valid(target^) {
+		return
+	}
+
+	if target.on_hit_proc != nil {
+		target.on_hit_proc(target, hitter)
+	}
+
+	if target.durability <= 0 {
+		return
+	}
+
+	target.durability -= 1
+	if target.durability > 0 {
+		return
+	}
+
+	if target.break_drop_item != .nil && target.break_drop_count > 0 {
+		spawn_item_pickup(target.break_drop_item, target.break_drop_count, target.pos + Vec2{0, 8})
+	}
+	entity_destroy(target)
+}
+
+try_hit_entity_at_mouse :: proc(mouse_world: Vec2) -> bool {
+	target, ok := find_entity_at_world_pos(mouse_world)
+	if !ok {
+		return false
+	}
+	if !is_valid(target^) {
+		return false
+	}
+
+	#partial switch target.kind {
+	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx:
+		return false
+	}
+
+	player := get_player()
+	entity_apply_hit(target, player)
+	return true
+}
+
 can_player_interact_entity :: proc(player: ^Entity, target: ^Entity) -> bool {
 	if !is_valid(player^) || !is_valid(target^) {
 		return false
@@ -2219,6 +2295,10 @@ try_throw_equipped_dagger :: proc() {
 
 setup_player :: proc(e: ^Entity) {
 	e.kind = .player
+	e.durability = 0
+	e.break_drop_item = .nil
+	e.break_drop_count = 0
+	e.on_hit_proc = entity_on_hit_noop
 
 	// this offset is to take it from the bottom center of the aseprite document
 	// and center it at the feet
@@ -2312,6 +2392,10 @@ setup_item_pickup :: proc(using e: ^Entity) {
 	kind = .item_pickup
 	draw_pivot = .center_center
 	blocks_player = false
+	durability = 0
+	break_drop_item = .nil
+	break_drop_count = 0
+	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(e: ^Entity) {
 		e.sprite = item_icon_sprite(e.pickup_item)
@@ -2336,6 +2420,10 @@ setup_dagger_projectile :: proc(using e: ^Entity) {
 	sprite = .dagger_item_flying
 	draw_pivot = .center_center
 	blocks_player = false
+	durability = 0
+	break_drop_item = .nil
+	break_drop_count = 0
+	on_hit_proc = entity_on_hit_noop
 	max_distance = 500
 	loop = false
 	frame_duration = 0.05
@@ -2392,6 +2480,10 @@ setup_movement_indicator_fx :: proc(using e: ^Entity) {
 	draw_pivot = .center_center
 	draw_offset = {}
 	blocks_player = false
+	durability = 0
+	break_drop_item = .nil
+	break_drop_count = 0
+	on_hit_proc = entity_on_hit_noop
 	loop = false
 	frame_duration = 0.05
 	anim_index = 0
@@ -2415,6 +2507,10 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 	sprite = .oblisk_rest
 	draw_pivot = .center_center
 	blocks_player = true
+	durability = 8
+	break_drop_item = .oblisk_fragment
+	break_drop_count = 1
+	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(e: ^Entity) {
 		player := get_player()
@@ -2449,6 +2545,10 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	sprite = .tree
 	draw_pivot = .center_center
 	blocks_player = true
+	durability = 8
+	break_drop_item = .wood
+	break_drop_count = 2
+	on_hit_proc = entity_on_hit_tree
 
 	e.update_proc = proc(_: ^Entity) {}
 	e.draw_proc = proc(e: Entity) {
@@ -2461,6 +2561,10 @@ setup_sapling_ent :: proc(using e: ^Entity) {
 	sprite = .sapling
 	draw_pivot = .center_center
 	blocks_player = true
+	durability = 3
+	break_drop_item = .wood
+	break_drop_count = 1
+	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(_: ^Entity) {}
 	e.draw_proc = proc(e: Entity) {
@@ -2473,6 +2577,10 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	sprite = .sprout
 	draw_pivot = .center_center
 	blocks_player = true
+	durability = 2
+	break_drop_item = .fiber
+	break_drop_count = 1
+	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(_: ^Entity) {}
 	e.draw_proc = proc(e: Entity) {
