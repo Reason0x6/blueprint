@@ -1,6 +1,9 @@
 # Changelog
 
-## [HEAD] Add active pause menu overlay with global ESC open/close behavior
+## [HEAD] Unreleased
+- No unreleased changes yet.
+
+## [aed2934] Add active pause menu overlay with global ESC open/close behavior
 - Added a pause menu overlay (`UI_OVERLAY_PAUSE`) with centered Resume UI.
 - Added a full-screen gray dimmer layer behind the pause panel to separate menu UI from gameplay.
 - Moved debug toggles (hitboxes, overlap, durability) from always-on top-left HUD into the pause menu.
