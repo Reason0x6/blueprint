@@ -1236,11 +1236,9 @@ positive_mod_int :: proc(v: int, m: int) -> int {
 }
 
 terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {
-	// Step through 1..54 in row-major order across the world and wrap.
-	local_x := positive_mod_int(tile_x, BIOME_CHUNK_SIZE_TILES)
-	local_y := positive_mod_int(tile_y, BIOME_CHUNK_SIZE_TILES)
-	seq := local_x + local_y*BIOME_CHUNK_SIZE_TILES
-	return positive_mod_int(seq, TERRAIN_MAX_BLOCK_INDEX) + 1
+	_ = tile_x
+	_ = tile_y
+	return TERRAIN_DEFAULT_BLOCK_INDEX
 }
 
 is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
