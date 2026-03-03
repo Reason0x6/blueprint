@@ -8,6 +8,7 @@
 - Added a new pause-menu `Grid: ON/OFF` debug toggle and gated world-grid rendering behind it (defaults ON).
 - Fixed pause-menu button label anchoring to use rect centers so labels no longer render left-shifted/outside buttons.
 - Replaced global `bg_use_forest_grass` map-wide texture choice with deterministic per-tile forest-grass overlays, so background tiles now mix default and forest variants in-world.
+- Fixed a compile error in forest-grass tile hashing by replacing invalid `^=` usage with Odin-compatible XOR expression syntax.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.

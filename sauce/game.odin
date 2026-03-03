@@ -1182,7 +1182,7 @@ draw_placeable_preview :: proc() {
 
 is_forest_grass_tile :: proc(tile_x: int, tile_y: int) -> bool {
 	seed := u64(i64(tile_x)*1103515245 + i64(tile_y)*214013 + 2531011)
-	seed ^= 0x9E3779B97F4A7C15
+	seed = seed ~ 0x9E3779B97F4A7C15
 	return random01_from_seed(seed) < FOREST_GRASS_TILE_CHANCE
 }
 
