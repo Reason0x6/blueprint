@@ -67,6 +67,8 @@ HOTBAR_SLOT_COUNT :: 6
 HOTBAR_SLOT_START :: INVENTORY_SLOT_COUNT - HOTBAR_SLOT_COUNT
 AUTO_PICKUP_RADIUS: f32 : 40
 DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
+ENTITY_GRID_SIZE: f32 : 4
+HITBOX_CORNER_CUT: f32 : 3
 
 Item_Kind :: enum u8 {
 	nil,
@@ -259,7 +261,7 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.dagger_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.dagger_item_flying = {frame_count=7},
 	.movement_indicator = {frame_count=6},
-	.tree = {overlap_box_size=Vec2{16, 20}, overlap_box_offset=Vec2{0, -16}, overlap_box_pivot=.bottom_center},
+	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, -51}, overlap_box_pivot=.bottom_center},
 
 	.oblisk = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
 	.oblisk_rest = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
@@ -623,6 +625,8 @@ game_update :: proc() {
 		}
 	}
 
+	apply_entity_grid_snap()
+
 	resolve_player_vs_hitboxes()
 	inventory_update()
 	try_throw_equipped_dagger()
@@ -852,8 +856,8 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 	case .tree_ent:
 		// Tree collider is only the trunk section so players can overlap canopy.
 		size := get_sprite_size(e.sprite)
-		center := e.pos + Vec2{0, -18}
-		return shape.rect_make(center, Vec2{max(10.0, size.x*0.28), max(14.0, size.y*0.32)}, pivot=.bottom_center), true
+		center := e.pos + Vec2{0, -51}
+		return shape.rect_make(center, Vec2{50, 20}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -870,6 +874,86 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		min := e.pos - size * utils.scale_from_pivot(e.draw_pivot) - e.draw_offset
 		max := min + size
 		return shape.Rect{min.x, min.y, max.x, max.y}, true
+	}
+}
+
+snap_to_grid :: proc(v: f32, grid: f32) -> f32 {
+	if grid <= 0 do return v
+	return math.round(v / grid) * grid
+}
+
+snap_vec2_to_grid :: proc(v: Vec2, grid: f32) -> Vec2 {
+	return Vec2{snap_to_grid(v.x, grid), snap_to_grid(v.y, grid)}
+}
+
+rounded_hitbox_sub_rects :: proc(rect: shape.Rect, corner_cut: f32) -> ([2]shape.Rect, bool) {
+	size := shape.rect_size(rect)
+	cut := corner_cut
+	cut = min(cut, max(0.0, size.x*0.5-0.001))
+	cut = min(cut, max(0.0, size.y*0.5-0.001))
+
+	if cut <= 0 {
+		return [2]shape.Rect{rect, rect}, false
+	}
+
+	// Union of these two rectangles creates corner-chamfered blocking.
+	vertical := shape.Rect{rect.x + cut, rect.y, rect.z - cut, rect.w}
+	horizontal := shape.Rect{rect.x, rect.y + cut, rect.z, rect.w - cut}
+	return [2]shape.Rect{vertical, horizontal}, true
+}
+
+rounded_hitbox_collide_rect :: proc(a: shape.Rect, blocker: shape.Rect, corner_cut: f32) -> (hit: bool, push: Vec2) {
+	subs, has_rounding := rounded_hitbox_sub_rects(blocker, corner_cut)
+	if !has_rounding {
+		return shape.collide(a, blocker)
+	}
+
+	best_push := Vec2{}
+	best_len_sq: f32 = 0
+
+	for sub in subs {
+		h, p := shape.collide(a, sub)
+		if !h do continue
+
+		l2 := p.x*p.x + p.y*p.y
+		if !hit || l2 < best_len_sq {
+			hit = true
+			best_push = p
+			best_len_sq = l2
+		}
+	}
+
+	return hit, best_push
+}
+
+rounded_hitbox_contains_point :: proc(rect: shape.Rect, p: Vec2, corner_cut: f32) -> bool {
+	subs, has_rounding := rounded_hitbox_sub_rects(rect, corner_cut)
+	if !has_rounding {
+		return shape.rect_contains(rect, p)
+	}
+
+	for sub in subs {
+		if shape.rect_contains(sub, p) {
+			return true
+		}
+	}
+	return false
+}
+
+should_grid_snap_entity :: proc(e: Entity) -> bool {
+	#partial switch e.kind {
+	case .player, .dagger_projectile, .movement_indicator_fx:
+		return false
+	case:
+		return true
+	}
+}
+
+apply_entity_grid_snap :: proc() {
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		if !should_grid_snap_entity(e^) do continue
+		e.pos = snap_vec2_to_grid(e.pos, ENTITY_GRID_SIZE)
 	}
 }
 
@@ -895,7 +979,7 @@ resolve_player_vs_hitboxes :: proc() {
 			blocker_hitbox, ok := get_entity_hitbox_rect(e^)
 			if !ok do continue
 
-			hit, push := shape.collide(player_hitbox, blocker_hitbox)
+			hit, push := rounded_hitbox_collide_rect(player_hitbox, blocker_hitbox, HITBOX_CORNER_CUT)
 			if !hit do continue
 
 			player.pos += push
@@ -1732,7 +1816,7 @@ is_world_position_blocked_for_player :: proc(pos: Vec2) -> bool {
 
 		hitbox, ok := get_entity_hitbox_rect(e^)
 		if !ok do continue
-		if shape.rect_contains(hitbox, pos) {
+		if rounded_hitbox_contains_point(hitbox, pos, HITBOX_CORNER_CUT) {
 			return true
 		}
 	}
@@ -2040,7 +2124,7 @@ setup_dagger_projectile :: proc(using e: ^Entity) {
 			other_hitbox, ok := get_entity_hitbox_rect(other^)
 			if !ok do continue
 
-			hit, _ := shape.collide(projectile_hitbox, other_hitbox)
+			hit, _ := rounded_hitbox_collide_rect(projectile_hitbox, other_hitbox, HITBOX_CORNER_CUT)
 			if hit {
 				despawn_dagger_projectile(e)
 				return

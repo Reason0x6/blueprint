@@ -1,6 +1,12 @@
 # Changelog
 
-## [HEAD] Remove shift-right-click box editor/debug UI
+## [HEAD] Add rounded-corner hitbox collision and grid-snapped entity constraints
+- Added rounded-corner (corner-cut) hitbox collision helpers and switched player/blocker and projectile/blocker checks to use the rounded collision path.
+- Added rounded point-block checks for click-to-move target validation so pathing respects rounded hitbox corners.
+- Added a grid snap pass for entities (excluding player/projectiles/indicator FX) so world entities are constrained to a consistent grid.
+- Included current asset workspace changes, including `Sapling.png` and `Sapling.meta`, in this commit.
+
+## [abe9a53] Remove shift-right-click box editor/debug UI
 - Removed the shift-right-click entity box editor workflow and all related debug panel UI.
 - Removed live hitbox/overlap override paths and restored `get_entity_hitbox_rect` / `get_entity_overlap_rect` to code-defined behavior only.
 - Restored normal right-click movement handling without the editor-selection branch.
