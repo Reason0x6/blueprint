@@ -16,6 +16,7 @@
 - Added biome tile sprite hooks (`desert_bg_tile`, `plains_bg_tile`, `forest_bg_tile`, `ruins_bg_tile`) with per-biome fallback solid-color tiles when biome textures are missing.
 - Added a new animated `grass_ent` entity type using `grass.png` and chunk-based deterministic world spawning so grass appears randomly across all biomes as you explore.
 - Added deterministic chunk vegetation generation for trees in Plains and Forest biomes so those chunks spawn random tree entities.
+- Fixed biome/vegetation chunk math to use world grid tile size (`ENTITY_GRID_SIZE`) instead of background texture pixel size, so grass/trees now spawn visibly in nearby chunks.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.

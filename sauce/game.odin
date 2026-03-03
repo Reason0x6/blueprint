@@ -1363,10 +1363,7 @@ spawn_vegetation_near_player_chunks :: proc() {
 		return
 	}
 
-	tile_size := get_sprite_size(.bg_repeat_tex0)
-	if tile_size.x <= 0 || tile_size.y <= 0 {
-		tile_size = Vec2{16, 16}
-	}
+	tile_size := Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}
 
 	player_tile_x := int(math.floor(player.pos.x / tile_size.x))
 	player_tile_y := int(math.floor(player.pos.y / tile_size.y))
@@ -1414,10 +1411,7 @@ draw_placeable_range_circle :: proc() {
 }
 
 draw_world_biome_tiles :: proc() {
-	tile_size := get_sprite_size(.bg_repeat_tex0)
-	if tile_size.x <= 0 || tile_size.y <= 0 {
-		tile_size = Vec2{16, 16}
-	}
+	tile_size := Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}
 
 	center := ctx.gs.cam_pos
 	half_w := f32(GAME_RES_WIDTH)*0.5 + tile_size.x
