@@ -1472,6 +1472,7 @@ TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
 TERRAIN_TILESET_BLOCK_ROWS :: 6
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
+WATER_COLLISION_OVERSIZE_PX: f32 : 2.0
 
 clear_terrain_block_hitboxes :: proc() {
 	for i in 0..=TERRAIN_MAX_BLOCK_INDEX {
@@ -1657,10 +1658,38 @@ is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> boo
 	return water_collision_mask.alpha[idx] > 0
 }
 
+is_water_pixel_blocked_oversized :: proc(tile_x: int, tile_y: int, world_pos: Vec2, oversize_px: f32) -> bool {
+	grid := ENTITY_GRID_SIZE
+	if grid <= 0 {
+		return false
+	}
+
+	tile_min_x := f32(tile_x) * grid
+	tile_min_y := f32(tile_y) * grid
+	tile_rect := shape.Rect{
+		tile_min_x - oversize_px,
+		tile_min_y - oversize_px,
+		tile_min_x + grid + oversize_px,
+		tile_min_y + grid + oversize_px,
+	}
+	if !shape.rect_contains(tile_rect, world_pos) {
+		return false
+	}
+	return is_water_pixel_blocked(tile_x, tile_y, world_pos)
+}
+
 is_world_pos_in_water_collision :: proc(pos: Vec2) -> bool {
 	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
 	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
-	return is_water_pixel_blocked(tile_x, tile_y, pos)
+	oversize := max(0.0, WATER_COLLISION_OVERSIZE_PX)
+	for oy := -1; oy <= 1; oy += 1 {
+		for ox := -1; ox <= 1; ox += 1 {
+			if is_water_pixel_blocked_oversized(tile_x+ox, tile_y+oy, pos, oversize) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
