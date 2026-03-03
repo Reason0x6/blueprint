@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add baseline crafting items, recipes, and crafting UI
+## [HEAD] Add tree entity using Tree texture
+- Added a new `tree_ent` entity kind and `tree` sprite entry mapped to `Tree.png`, with tree-specific setup and draw behavior.
+- Added a trunk-focused blocking hitbox for trees so canopy overlap still works while the trunk blocks movement.
+- Spawned a tree instance at game start for immediate in-world testing.
+
+## [98fea29] Add baseline crafting items, recipes, and crafting UI
 - Added foundational crafting materials and intermediates (`wood`, `stone`, `fiber`, `stick`, `rope`, `stone_blade`) and seeded starter pickups in the world.
 - Implemented crafting state with a 2x3 crafting input grid plus a single output slot, integrated into the inventory panel UI.
 - Added recipe evaluation/ingredient consumption and drag-and-drop support between inventory/hotbar and crafting slots, with crafted output pickup via click.

@@ -182,6 +182,7 @@ Entity_Kind :: enum {
 	nil,
 	player,
 	oblisk_ent,
+	tree_ent,
 	item_pickup,
 	dagger_projectile,
 	movement_indicator_fx,
@@ -196,6 +197,7 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 		case .nil:
 		case .player: setup_player(e)
 		case .oblisk_ent: setup_oblisk_ent(e) // for now, just use the same setup as the normal oblisk ent
+		case .tree_ent: setup_tree_ent(e)
 		case .item_pickup: setup_item_pickup(e)
 		case .dagger_projectile: setup_dagger_projectile(e)
 		case .movement_indicator_fx: setup_movement_indicator_fx(e)
@@ -239,6 +241,7 @@ Sprite_Name :: enum {
 	player_death,
 	player_run,
 	player_idle,
+	tree,
 	oblisk,
 	oblisk_rest,
 	oblisk_broken,
@@ -259,6 +262,7 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.dagger_item_thrown = {frame_count=7},
 	.dagger_item_flying = {frame_count=7},
 	.movement_indicator = {frame_count=6},
+	.tree = {overlap_box_size=Vec2{16, 20}, overlap_box_offset=Vec2{0, -16}, overlap_box_pivot=.bottom_center},
 
 	.oblisk = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
 	.oblisk_rest = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
@@ -599,6 +603,8 @@ game_update :: proc() {
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
+		tree := entity_create(.tree_ent)
+		tree.pos = Vec2{26, 0}
 
 		spawn_item_pickup(.wood, 4, Vec2{-68, 8})
 		spawn_item_pickup(.stone, 3, Vec2{-86, 8})
@@ -845,6 +851,11 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		center := e.pos + Vec2{0, -24}
 
 		return shape.rect_make(center, Vec2{size.x-2,size.y/3}, pivot=.bottom_center), true
+	case .tree_ent:
+		// Tree collider is only the trunk section so players can overlap canopy.
+		size := get_sprite_size(e.sprite)
+		center := e.pos + Vec2{0, -18}
+		return shape.rect_make(center, Vec2{max(10.0, size.x*0.28), max(14.0, size.y*0.32)}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -2096,6 +2107,18 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 		if dist_sq <= 40*40 {
 			draw_text(e.pos + Vec2{0, 14}, "Press E", pivot=.bottom_center, col={1, 1, 1, 0.75}, drop_shadow_col={0, 0, 0, 0.35})
 		}
+	}
+}
+
+setup_tree_ent :: proc(using e: ^Entity) {
+	kind = .tree_ent
+	sprite = .tree
+	draw_pivot = .center_center
+	blocks_player = true
+
+	e.update_proc = proc(_: ^Entity) {}
+	e.draw_proc = proc(e: Entity) {
+		draw_entity_default(e)
 	}
 }
 
