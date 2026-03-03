@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Simplify durability multiplier config to only non-default items
+## [HEAD] Suppress hit highlight for zero-damage hits
+- `get_hit_durability_damage` now permits `0` damage results from held-item multipliers.
+- `entity_apply_hit` now only applies the white hit highlight when computed damage is greater than `0`.
+
+## [b4321c9] Simplify durability multiplier config to only non-default items
 - Simplified `item_hit_durability_multiplier` so only items with non-`1.0` values are explicitly listed.
 - All unspecified items now use the default multiplier path (`1.0`).
 

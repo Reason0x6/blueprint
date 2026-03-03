@@ -1447,7 +1447,7 @@ get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
 		mult = item_hit_durability_multiplier(item)
 	}
 
-	return max(1, int(math.ceil(mult)))
+	return max(0, int(math.ceil(mult)))
 }
 
 inventory_add_item :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -> (added: int) {
@@ -2197,10 +2197,12 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		return
 	}
 
-	target.hit_flash = Vec4{1, 1, 1, 1}
+	damage := get_hit_durability_damage(hitter)
+	if damage > 0 {
+		target.hit_flash = Vec4{1, 1, 1, 1}
+	}
 	target.last_hit_time = now()
 	target.durability_regen_accum = 0
-	damage := get_hit_durability_damage(hitter)
 	target.durability -= damage
 	if target.durability > 0 {
 		return
