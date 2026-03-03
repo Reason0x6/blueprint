@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Move hit-drop spawns closer to player with hitbox-edge clamp
+## [HEAD] Speed up durability regeneration and shorten regen delay
+- Increased durability regeneration rate from `1.0` to `2.0` per second.
+- Reduced post-hit regeneration delay from `1.0s` to `0.5s` so regen starts sooner.
+
+## [63f4468] Move hit-drop spawns closer to player with hitbox-edge clamp
 - Hit-triggered drops now spawn halfway between player and entity, then clamp to a maximum of `40px` from the closest point on the entity hitbox edge.
 - Updated tree on-hit wood drops and durability break drops to use the new midpoint + edge-clamp spawn position before bounce motion.
 
