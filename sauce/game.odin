@@ -204,11 +204,15 @@ Water_Collision_Mask :: struct {
 water_collision_mask: Water_Collision_Mask
 
 Terrain_Block_Hitbox :: struct {
-	enabled: bool,
 	offset: Vec2,
 	size: Vec2,
 }
-terrain_block_hitboxes: [TERRAIN_MAX_BLOCK_INDEX+1]Terrain_Block_Hitbox
+
+Terrain_Block_Hitbox_Set :: struct {
+	count: int,
+	boxes: [8]Terrain_Block_Hitbox,
+}
+terrain_block_hitboxes: [TERRAIN_MAX_BLOCK_INDEX+1]Terrain_Block_Hitbox_Set
 
 //
 // action -> key mapping
@@ -1472,7 +1476,7 @@ TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
 TERRAIN_TILESET_BLOCK_ROWS :: 6
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
-WATER_COLLISION_OVERSIZE_PX: f32 : 8.0
+WATER_COLLISION_OVERSIZE_PX: f32 : 6.0
 
 clear_terrain_block_hitboxes :: proc() {
 	for i in 0..=TERRAIN_MAX_BLOCK_INDEX {
@@ -1480,26 +1484,42 @@ clear_terrain_block_hitboxes :: proc() {
 	}
 }
 
-set_terrain_block_hitbox :: proc(block_index: int, offset: Vec2, size: Vec2) {
+clear_terrain_block_hitbox :: proc(block_index: int) {
 	if block_index < 1 || block_index > TERRAIN_MAX_BLOCK_INDEX {
 		return
 	}
-	if size.x <= 0 || size.y <= 0 {
-		terrain_block_hitboxes[block_index] = {}
+	terrain_block_hitboxes[block_index] = {}
+}
+
+add_terrain_block_hitbox :: proc(block_index: int, offset: Vec2, size: Vec2) {
+	if block_index < 1 || block_index > TERRAIN_MAX_BLOCK_INDEX {
 		return
 	}
-	terrain_block_hitboxes[block_index] = Terrain_Block_Hitbox{
-		enabled = true,
-		offset = offset,
-		size = size,
+
+	if size.x <= 0 || size.y <= 0 {
+		return
 	}
+
+	set := &terrain_block_hitboxes[block_index]
+	if set.count >= len(set.boxes) {
+		return
+	}
+	set.boxes[set.count] = Terrain_Block_Hitbox{offset = offset, size = size}
+	set.count += 1
+}
+
+set_terrain_block_hitbox :: proc(block_index: int, offset: Vec2, size: Vec2) {
+	clear_terrain_block_hitbox(block_index)
+	add_terrain_block_hitbox(block_index, offset, size)
 }
 
 setup_terrain_block_hitboxes :: proc() {
 	clear_terrain_block_hitboxes()
 
 	// Flat ground: no collision.
+	set_terrain_block_hitbox(2, Vec2{0, 32}, Vec2{32,2})
 	set_terrain_block_hitbox(11, {}, {})
+	set_terrain_block_hitbox(20, Vec2{0, 0}, Vec2{32,2})
 
 	// Default blocking examples for cliff/wall row in the Tiny Swords 9x6 layout.
 	// Edit these definitions per block index to match your intended terrain collision.
@@ -1595,14 +1615,29 @@ is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
 	return tile.kind == .block && tile.block_index > 0
 }
 
-get_terrain_block_hitbox_rect :: proc(tile_x: int, tile_y: int) -> (shape.Rect, bool) {
+terrain_block_hitbox_count_for_tile :: proc(tile_x: int, tile_y: int) -> int {
+	tile := terrain_tile_for_tile(tile_x, tile_y)
+	if tile.kind != .block || tile.block_index <= 0 || tile.block_index > TERRAIN_MAX_BLOCK_INDEX {
+		return 0
+	}
+
+	set := terrain_block_hitboxes[tile.block_index]
+	return set.count
+}
+
+terrain_block_hitbox_rect_for_tile :: proc(tile_x: int, tile_y: int, hitbox_index: int) -> (shape.Rect, bool) {
 	tile := terrain_tile_for_tile(tile_x, tile_y)
 	if tile.kind != .block || tile.block_index <= 0 || tile.block_index > TERRAIN_MAX_BLOCK_INDEX {
 		return {}, false
 	}
 
-	cfg := terrain_block_hitboxes[tile.block_index]
-	if !cfg.enabled || cfg.size.x <= 0 || cfg.size.y <= 0 {
+	set := terrain_block_hitboxes[tile.block_index]
+	if hitbox_index < 0 || hitbox_index >= set.count || hitbox_index >= len(set.boxes) {
+		return {}, false
+	}
+
+	cfg := set.boxes[hitbox_index]
+	if cfg.size.x <= 0 || cfg.size.y <= 0 {
 		return {}, false
 	}
 
@@ -1621,9 +1656,14 @@ is_world_pos_in_terrain_block_collision :: proc(pos: Vec2) -> bool {
 	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
 	for oy := -1; oy <= 1; oy += 1 {
 		for ox := -1; ox <= 1; ox += 1 {
-			rect, ok := get_terrain_block_hitbox_rect(tile_x+ox, tile_y+oy)
-			if ok && shape.rect_contains(rect, pos) {
-				return true
+			tx := tile_x + ox
+			ty := tile_y + oy
+			count := terrain_block_hitbox_count_for_tile(tx, ty)
+			for i in 0..<count {
+				rect, ok := terrain_block_hitbox_rect_for_tile(tx, ty, i)
+				if ok && shape.rect_contains(rect, pos) {
+					return true
+				}
 			}
 		}
 	}
@@ -1721,11 +1761,14 @@ is_rect_touching_terrain_block_collision :: proc(rect: shape.Rect) -> bool {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			block_rect, block_ok := get_terrain_block_hitbox_rect(tx, ty)
-			if block_ok {
-				hit, _ := rounded_hitbox_collide_rect(rect, block_rect, HITBOX_CORNER_CUT)
-				if hit {
-					return true
+			count := terrain_block_hitbox_count_for_tile(tx, ty)
+			for i in 0..<count {
+				block_rect, block_ok := terrain_block_hitbox_rect_for_tile(tx, ty, i)
+				if block_ok {
+					hit, _ := rounded_hitbox_collide_rect(rect, block_rect, HITBOX_CORNER_CUT)
+					if hit {
+						return true
+					}
 				}
 			}
 			tx += 1
@@ -1833,9 +1876,12 @@ draw_terrain_block_collision_debug :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			rect, ok := get_terrain_block_hitbox_rect(tx, ty)
-			if ok {
-				draw_rect(rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1.0, 0.62, 0.2, 0.88}, z_layer=layer)
+			count := terrain_block_hitbox_count_for_tile(tx, ty)
+			for i in 0..<count {
+				rect, ok := terrain_block_hitbox_rect_for_tile(tx, ty, i)
+				if ok {
+					draw_rect(rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1.0, 0.62, 0.2, 0.88}, z_layer=layer)
+				}
 			}
 			tx += 1
 		}

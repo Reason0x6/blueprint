@@ -12,6 +12,8 @@
 - Grid debug is now OFF by default at startup (still toggleable from the pause menu).
 - Fixed hitbox-toggle crashes by replacing per-pixel-per-tile water debug fills with lightweight per-tile mask-bounds debug rectangles.
 - Fixed water collision mask dimension loading to use the actual decoded `water.png` width/height (removed erroneous `+14` sizing), keeping collision sampling and debug bounds in sync.
+- Terrain block collision now supports multiple hitboxes per block index via `add_terrain_block_hitbox`, while `set_terrain_block_hitbox` remains as a clear-and-set helper for single-box cases.
+- Updated terrain block point, rect, and debug collision paths to evaluate/draw all configured hitboxes for the block tile instead of only one.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
