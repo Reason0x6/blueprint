@@ -55,6 +55,7 @@ Game_State :: struct {
 	player_handle: Entity_Handle,
 	debug_show_hitboxes: bool,
 	debug_show_overlap_boxes: bool,
+	debug_show_durability: bool,
 	inventory: Inventory_State,
 
 	scratch: struct {
@@ -799,6 +800,22 @@ app_frame :: proc() {
 		overlap_button_label := ctx.gs.debug_show_overlap_boxes ? "Overlap: ON" : "Overlap: OFF"
 		draw_text(overlap_button_pos + Vec2{2, -2}, overlap_button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
 
+		dura_button_pos := overlap_button_pos + Vec2{0, -14}
+		dura_button_rect := shape.rect_make(dura_button_pos, button_size, pivot=.top_left)
+		dura_hover, dura_pressed := raw_button(dura_button_rect)
+		if dura_pressed {
+			ctx.gs.debug_show_durability = !ctx.gs.debug_show_durability
+		}
+
+		dura_button_col := Vec4{0.05, 0.05, 0.05, 0.7}
+		if dura_hover {
+			dura_button_col = Vec4{0.2, 0.2, 0.2, 0.8}
+		}
+		draw_rect(dura_button_rect, col=dura_button_col, outline_col=Vec4{1, 1, 1, 0.45}, z_layer=.ui)
+
+		dura_button_label := ctx.gs.debug_show_durability ? "Durability: ON" : "Durability: OFF"
+		draw_text(dura_button_pos + Vec2{2, -2}, dura_button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
+
 		draw_inventory_ui()
 	}
 
@@ -972,6 +989,13 @@ game_draw :: proc() {
 				draw_entity_overlap_debug(e^)
 			}
 		}
+
+		if ctx.gs.debug_show_durability {
+			for handle in get_all_ents() {
+				e := entity_from_handle(handle)
+				draw_entity_durability_debug(e^)
+			}
+		}
 	}
 }
 
@@ -991,6 +1015,24 @@ draw_entity_overlap_debug :: proc(e: Entity) {
 	}
 
 	draw_rect(overlap_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.9, 1.0, 0.95}, z_layer=.top)
+}
+
+draw_entity_durability_debug :: proc(e: Entity) {
+	if e.durability <= 0 {
+		return
+	}
+	if e.kind == .player || e.kind == .item_pickup || e.kind == .dagger_projectile || e.kind == .movement_indicator_fx {
+		return
+	}
+
+	pos := e.pos + Vec2{0, 14}
+	sprite_rect, ok := get_entity_sprite_rect(e)
+	if ok {
+		pos = Vec2{(sprite_rect.x + sprite_rect.z) * 0.5, sprite_rect.w + 4}
+	}
+
+	label := fmt.tprintf("%v", e.durability)
+	draw_text(pos, label, pivot=.bottom_center, z_layer=.top, col=Vec4{1, 0.95, 0.35, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.8})
 }
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {

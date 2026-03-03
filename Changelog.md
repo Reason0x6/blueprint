@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Add per-entity hit durability with tree on-hit wood drops and break drops
+## [HEAD] Add debug toggle to render entity durability above world entities
+- Added a third top-left debug button (`Durability: ON/OFF`) to toggle durability labels at runtime.
+- Added world debug rendering that displays current durability above entities that have durability values.
+
+## [a51e3da] Add per-entity hit durability with tree on-hit wood drops and break drops
 - Added per-entity `durability`, `on_hit_proc`, and break-drop (`break_drop_item`, `break_drop_count`) fields to `Entity`, with values configured in each `setup_*` proc.
 - Added left-click world hit handling that applies entity hits, reduces durability by 1 per click, and destroys entities at 0 durability while dropping their configured break item.
 - Added tree-specific `on_hit_proc` that spawns `wood` with a 15% chance on each hit.
