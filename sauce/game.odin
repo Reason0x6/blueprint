@@ -1198,7 +1198,7 @@ game_update :: proc() {
 		player := entity_create(.player)
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
-		ctx.gs.debug_show_grid = true
+		ctx.gs.debug_show_grid = false
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
 		_ = spawn_terrain_structure("island_1", Vec2{0,0})
 
@@ -1746,6 +1746,48 @@ draw_water_collision_debug :: proc() {
 	min_tile_y := int(math.floor((center.y - half_h) / tile_size.y))
 	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
 
+	draw_water_collision_mask_for_tile :: proc(tile_x: int, tile_y: int, layer: ZLayer) {
+		tile := terrain_tile_for_tile(tile_x, tile_y)
+		if tile.kind != .water {
+			return
+		}
+
+		tile_min_x := f32(tile_x) * ENTITY_GRID_SIZE
+		tile_min_y := f32(tile_y) * ENTITY_GRID_SIZE
+		oversize := max(0.0, WATER_COLLISION_OVERSIZE_PX)
+
+		// Fallback: if mask is unavailable, draw full-tile blocked area.
+		if water_collision_mask.width <= 0 || water_collision_mask.height <= 0 || len(water_collision_mask.alpha) == 0 {
+			tile_rect := shape.Rect{
+				tile_min_x - oversize,
+				tile_min_y - oversize,
+				tile_min_x + ENTITY_GRID_SIZE + oversize,
+				tile_min_y + ENTITY_GRID_SIZE + oversize,
+			}
+			draw_rect(tile_rect, col=Vec4{0.2, 0.75, 1.0, 0.12}, outline_col=Vec4{0.2, 0.75, 1.0, 0.82}, z_layer=layer)
+			return
+		}
+
+		cell_w := ENTITY_GRID_SIZE / f32(water_collision_mask.width)
+		cell_h := ENTITY_GRID_SIZE / f32(water_collision_mask.height)
+
+		for py in 0..<water_collision_mask.height {
+			for px in 0..<water_collision_mask.width {
+				idx := py*water_collision_mask.width + px
+				if idx < 0 || idx >= len(water_collision_mask.alpha) do continue
+				if water_collision_mask.alpha[idx] == 0 do continue
+
+				pixel_rect := shape.Rect{
+					tile_min_x + f32(px)*cell_w - oversize,
+					tile_min_y + f32(py)*cell_h - oversize,
+					tile_min_x + f32(px+1)*cell_w + oversize,
+					tile_min_y + f32(py+1)*cell_h + oversize,
+				}
+				draw_rect(pixel_rect, col=Vec4{0.2, 0.75, 1.0, 0.18}, z_layer=layer)
+			}
+		}
+	}
+
 	ty := min_tile_y
 	layer: ZLayer = .top
 	if is_game_paused() {
@@ -1754,12 +1796,7 @@ draw_water_collision_debug :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			tile := terrain_tile_for_tile(tx, ty)
-			if tile.kind == .water {
-				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
-				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
-				draw_rect(tile_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.75, 1.0, 0.85}, z_layer=layer)
-			}
+			draw_water_collision_mask_for_tile(tx, ty, layer)
 			tx += 1
 		}
 		ty += 1

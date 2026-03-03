@@ -8,6 +8,8 @@
 - Added configurable water collision oversize (`WATER_COLLISION_OVERSIZE_PX`) and updated water blocking checks to test neighboring water tiles so expanded water hitboxes work correctly across tile edges.
 - Fixed terrain block hitbox queries to include neighboring tiles for both point and rect checks, so offset/oversized hitboxes are respected consistently for structure tiles too.
 - Hitbox debug rendering (entity, water, terrain-block outlines) now draws on the pause-menu layer while paused, so toggling hitboxes in the pause menu shows them immediately above the gray overlay.
+- Water debug hitboxes now visualize the actual per-pixel `water.png` collision mask (with oversize margin) instead of a full-tile blue outline, so structure-water debug matches real collision shape.
+- Grid debug is now OFF by default at startup (still toggleable from the pause menu).
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
