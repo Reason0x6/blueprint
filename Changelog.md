@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add shift-right-click hitbox/overlap debug editor UI
+## [HEAD] Refine debug editor placement/repeat and move crafting panel above inventory
+- Moved and compacted the hitbox/overlap debug editor into the top-left so it no longer extends off-screen.
+- Added press-and-hold behavior for debug +/- controls using frame-based repeat while left mouse is held.
+- Made the crafting panel wider and positioned it above the inventory panel, with updated slot anchors in the new layout.
+
+## [1278890] Add shift-right-click hitbox/overlap debug editor UI
 - Added a debug box editor that opens for a selected entity when you Shift+Right-click it, with live selection clear on empty-space Shift+Right-click.
 - Added on-screen +/- controls for hitbox and overlap offset/size values and applied those overrides live to collision/overlap queries for the selected entity.
 - Added copy-ready code suggestion lines in the debug panel to help transfer edited values back into `get_entity_hitbox_rect` and `sprite_data`.

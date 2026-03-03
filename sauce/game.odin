@@ -641,13 +641,25 @@ box_editor_step_button :: proc(pos: Vec2, label: string, value: ^f32, step: f32)
 	minus_rect := shape.rect_make(pos + Vec2{74, 0}, Vec2{12, 10}, pivot=.top_left)
 	plus_rect := shape.rect_make(pos + Vec2{128, 0}, Vec2{12, 10}, pivot=.top_left)
 
-	minus_hover, minus_pressed := raw_button(minus_rect)
-	plus_hover, plus_pressed := raw_button(plus_rect)
+	minus_hover := shape.rect_contains(minus_rect, mouse_pos_in_current_space())
+	plus_hover := shape.rect_contains(plus_rect, mouse_pos_in_current_space())
+	minus_pressed := minus_hover && key_pressed(.LEFT_MOUSE)
+	plus_pressed := plus_hover && key_pressed(.LEFT_MOUSE)
 	if minus_pressed {
 		value^ -= step
 	}
 	if plus_pressed {
 		value^ += step
+	}
+
+	if key_down(.LEFT_MOUSE) {
+		repeat_step := step * 7.5 * ctx.delta_t
+		if minus_hover {
+			value^ -= repeat_step
+		}
+		if plus_hover {
+			value^ += repeat_step
+		}
 	}
 
 	draw_rect(minus_rect, col=minus_hover ? Vec4{0.25, 0.25, 0.25, 0.85} : Vec4{0.12, 0.12, 0.12, 0.82}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
@@ -663,9 +675,10 @@ draw_debug_box_editor_ui :: proc() {
 		return
 	}
 
-	p := shape.rect_make(Vec2{6, 166}, Vec2{220, 108}, pivot=.top_left)
+	_, top := screen_pivot(.top_left)
+	p := shape.rect_make(Vec2{6, top-6}, Vec2{186, 120}, pivot=.top_left)
 	draw_rect(p, col=Vec4{0.03, 0.03, 0.03, 0.92}, outline_col=Vec4{0.9, 0.9, 0.9, 0.3}, z_layer=.ui)
-	draw_text(p.xy + Vec2{4, -2}, fmt.tprintf("Box Editor: kind=%v sprite=%v", e.kind, e.sprite), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
+	draw_text(p.xy + Vec2{4, -2}, fmt.tprintf("Box Editor: %v", e.kind), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
 
 	step: f32 = 1
 	if is_shift_down() {
@@ -674,18 +687,18 @@ draw_debug_box_editor_ui :: proc() {
 	draw_text(p.xy + Vec2{4, -14}, fmt.tprintf("Step: %.1f (hold Shift for 2x)", step), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.6}, drop_shadow_col=Vec4{})
 
 	box_editor_step_button(p.xy + Vec2{4, -26}, "Hit X", &ctx.gs.debug_box_editor.hitbox_offset.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -38}, "Hit Y", &ctx.gs.debug_box_editor.hitbox_offset.y, step)
-	box_editor_step_button(p.xy + Vec2{4, -50}, "Hit W", &ctx.gs.debug_box_editor.hitbox_size.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -62}, "Hit H", &ctx.gs.debug_box_editor.hitbox_size.y, step)
-	box_editor_step_button(p.xy + Vec2{4, -76}, "Ov X", &ctx.gs.debug_box_editor.overlap_offset.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -88}, "Ov Y", &ctx.gs.debug_box_editor.overlap_offset.y, step)
-	box_editor_step_button(p.xy + Vec2{4, -100}, "Ov W", &ctx.gs.debug_box_editor.overlap_size.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -112}, "Ov H", &ctx.gs.debug_box_editor.overlap_size.y, step)
+	box_editor_step_button(p.xy + Vec2{4, -36}, "Hit Y", &ctx.gs.debug_box_editor.hitbox_offset.y, step)
+	box_editor_step_button(p.xy + Vec2{4, -46}, "Hit W", &ctx.gs.debug_box_editor.hitbox_size.x, step)
+	box_editor_step_button(p.xy + Vec2{4, -56}, "Hit H", &ctx.gs.debug_box_editor.hitbox_size.y, step)
+	box_editor_step_button(p.xy + Vec2{4, -68}, "Ov X", &ctx.gs.debug_box_editor.overlap_offset.x, step)
+	box_editor_step_button(p.xy + Vec2{4, -78}, "Ov Y", &ctx.gs.debug_box_editor.overlap_offset.y, step)
+	box_editor_step_button(p.xy + Vec2{4, -88}, "Ov W", &ctx.gs.debug_box_editor.overlap_size.x, step)
+	box_editor_step_button(p.xy + Vec2{4, -98}, "Ov H", &ctx.gs.debug_box_editor.overlap_size.y, step)
 
 	hit_code := fmt.tprintf("HITBOX code: case .%v: return shape.rect_make(e.pos + Vec2{%.1f, %.1f}, Vec2{%.1f, %.1f}, pivot=.center_center), true", e.kind, ctx.gs.debug_box_editor.hitbox_offset.x, ctx.gs.debug_box_editor.hitbox_offset.y, max(1.0, ctx.gs.debug_box_editor.hitbox_size.x), max(1.0, ctx.gs.debug_box_editor.hitbox_size.y))
 	ov_code := fmt.tprintf("OVERLAP code: .%v = {overlap_box_size=Vec2{%.1f, %.1f}, overlap_box_offset=Vec2{%.1f, %.1f}, overlap_box_pivot=.center_center}", e.sprite, max(1.0, ctx.gs.debug_box_editor.overlap_size.x), max(1.0, ctx.gs.debug_box_editor.overlap_size.y), ctx.gs.debug_box_editor.overlap_offset.x, ctx.gs.debug_box_editor.overlap_offset.y)
-	draw_text(p.xy + Vec2{4, -126}, hit_code, pivot=.top_left, z_layer=.ui, col=Vec4{0.75, 1, 0.75, 0.85}, drop_shadow_col=Vec4{})
-	draw_text(p.xy + Vec2{4, -138}, ov_code, pivot=.top_left, z_layer=.ui, col=Vec4{0.75, 1, 1, 0.85}, drop_shadow_col=Vec4{})
+	draw_text(p.xy + Vec2{4, -110}, hit_code, pivot=.top_left, z_layer=.ui, col=Vec4{0.75, 1, 0.75, 0.85}, drop_shadow_col=Vec4{})
+	draw_text(p.xy + Vec2{4, -118}, ov_code, pivot=.top_left, z_layer=.ui, col=Vec4{0.75, 1, 1, 0.85}, drop_shadow_col=Vec4{})
 }
 
 app_shutdown :: proc() {
@@ -1395,13 +1408,16 @@ hotbar_slot_rect :: proc(i: int) -> shape.Rect {
 inventory_panel_rect :: proc() -> shape.Rect {
 	cx, cy := screen_pivot(.center_center)
 	panel_size := Vec2{170, 92}
-	return shape.rect_make(Vec2{cx - 50, cy + 20}, panel_size, pivot=.center_center)
+	return shape.rect_make(Vec2{cx - 50, cy - 10}, panel_size, pivot=.center_center)
 }
 
 crafting_panel_rect :: proc() -> shape.Rect {
-	cx, cy := screen_pivot(.center_center)
-	panel_size := Vec2{84, 92}
-	return shape.rect_make(Vec2{cx + 82, cy + 20}, panel_size, pivot=.center_center)
+	inv := inventory_panel_rect()
+	panel_size := Vec2{220, 92}
+	inv_h := inv.w - inv.y
+	cx := (inv.x + inv.z) * 0.5
+	cy := (inv.y + inv.w) * 0.5 + inv_h*0.5 + panel_size.y*0.5 + 8
+	return shape.rect_make(Vec2{cx, cy}, panel_size, pivot=.center_center)
 }
 
 inventory_grid_slot_rect :: proc(i: int) -> shape.Rect {
@@ -1423,7 +1439,7 @@ crafting_input_slot_rect :: proc(i: int) -> shape.Rect {
 
 	slot_size := Vec2{22, 22}
 	gap: f32 = 3
-	grid_start := Vec2{panel.x + 8, panel.y + 8}
+	grid_start := Vec2{panel.x + 58, panel.y + 8}
 
 	col := i % CRAFT_INPUT_COLS
 	row := i / CRAFT_INPUT_COLS
@@ -1434,7 +1450,7 @@ crafting_input_slot_rect :: proc(i: int) -> shape.Rect {
 crafting_output_slot_rect :: proc() -> shape.Rect {
 	panel := crafting_panel_rect()
 	slot_size := Vec2{22, 22}
-	return shape.rect_make(Vec2{panel.x + 54, panel.y + 35}, slot_size, pivot=.bottom_left)
+	return shape.rect_make(Vec2{panel.x + 154, panel.y + 35}, slot_size, pivot=.bottom_left)
 }
 
 find_inventory_slot_at_mouse :: proc(inv: ^Inventory_State, mouse_pos: Vec2) -> (slot_index: int, ok: bool) {
