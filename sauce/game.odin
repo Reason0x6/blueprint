@@ -804,6 +804,11 @@ parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 	if len(t) == 0 {
 		return {}, false
 	}
+	if len(t) >= 2 {
+		if (t[0] == '"' && t[len(t)-1] == '"') || (t[0] == '\'' && t[len(t)-1] == '\'') {
+			t = t[1:len(t)-1]
+		}
+	}
 
 	if t == "water" {
 		return Terrain_Tile{kind=.water}, true
@@ -1148,7 +1153,7 @@ game_update :: proc() {
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.debug_show_grid = true
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
-		_ = spawn_terrain_structure("island_1", Vec2{-160, -64})
+		_ = spawn_terrain_structure("island_1", Vec2{0,0})
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
@@ -1432,6 +1437,13 @@ find_terrain_structure_index_by_name :: proc(name: string) -> (int, bool) {
 	if len(terrain_structures) == 0 {
 		return -1, false
 	}
+	id, id_ok := parse_positive_int_str(name)
+	if id_ok {
+		idx := id - 1
+		if idx >= 0 && idx < len(terrain_structures) {
+			return idx, true
+		}
+	}
 
 	for i in 0..<len(terrain_structures) {
 		if terrain_structures[i].name == name {
@@ -1444,7 +1456,7 @@ find_terrain_structure_index_by_name :: proc(name: string) -> (int, bool) {
 spawn_terrain_structure_at_tile :: proc(name: string, origin_tile_x: int, origin_tile_y: int) -> bool {
 	structure_index, ok := find_terrain_structure_index_by_name(name)
 	if !ok {
-		log.warnf("spawn_terrain_structure: unknown structure %q", name)
+		log.warnf("spawn_terrain_structure: unknown structure %q (loaded=%v)", name, len(terrain_structures))
 		return false
 	}
 
@@ -3882,7 +3894,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 		diff := player.pos - e.pos
 		dist_sq := diff.x*diff.x + diff.y*diff.y
 		if dist_sq <= INTERACT_RANGE*INTERACT_RANGE {
-			draw_text(e.pos + Vec2{0, 14}, "Press E", pivot=.bottom_center, col={1, 1, 1, 0.75}, drop_shadow_col={0, 0, 0, 0.35})
+			draw_text(e.pos + Vec2{0, 24}, "Press E", pivot=.bottom_center, col={1, 1, 1, 0.75}, drop_shadow_col={0, 0, 0, 0.35})
 		}
 	}
 }

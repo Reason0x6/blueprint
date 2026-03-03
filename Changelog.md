@@ -44,6 +44,7 @@
 - Terrain structures can now be manually spawned in code via `spawn_terrain_structure(name, world_pos)`/`spawn_terrain_structure_at_tile`, with a startup example spawn wired for `island_1`.
 - Terrain tile resolution now uses spawned structure instances (last-spawned wins on overlap), with block `11` fallback for unoccupied tiles.
 - Terrain rendering now draws a water underlay beneath non-water tiles so transparent pixels in terrain block sprites reveal water below.
+- Terrain structure parser now accepts quoted tokens (e.g. `"water"`), and structure spawning now accepts numeric ids (`"1"` = first loaded structure) in addition to structure names.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
