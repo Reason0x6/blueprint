@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Fix startup crash by matching item sprite names to texture filenames
+## [HEAD] Map stone and rope items to their new texture sprites
+- Added `stone` and `rope` sprite ids in `Sprite_Name`/`sprite_data` so they load from `res/images/stone.png` and `res/images/rope.png`.
+- Updated `item_icon_sprite` to return `.stone` for `Item_Kind.stone` and `.rope` for `Item_Kind.rope` instead of placeholder sprites.
+
+## [ee236a6] Fix startup crash by matching item sprite names to texture filenames
 - Renamed item sprite enum entries from `wood_item`/`sticks_item`/`fibre_item` to `wood`/`sticks`/`fibre` so atlas loading matches `res/images/wood.png`, `sticks.png`, and `fibre.png`.
 - Updated `sprite_data` and `item_icon_sprite` mappings to the renamed sprite ids, removing the missing-file assert on startup.
 
