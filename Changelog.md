@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add debug toggle to render entity durability above world entities
+## [HEAD] Add delayed durability regeneration for entities after hits
+- Added per-entity durability regeneration state (`durability_max`, `last_hit_time`, regen accumulator) and per-frame regen updates.
+- Entities now wait 1 second after being hit before regenerating missing durability gradually over time.
+- Added setup helper wiring so durability/max values remain setup-defined while supporting regeneration behavior.
+
+## [c1891a1] Add debug toggle to render entity durability above world entities
 - Added a third top-left debug button (`Durability: ON/OFF`) to toggle durability labels at runtime.
 - Added world debug rendering that displays current durability above entities that have durability values.
 

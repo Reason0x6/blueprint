@@ -71,6 +71,8 @@ DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
 ENTITY_GRID_SIZE: f32 : 4
 HITBOX_CORNER_CUT: f32 : 3
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
+DURABILITY_REGEN_DELAY_SEC: f64 : 1.0
+DURABILITY_REGEN_PER_SEC: f32 : 0.5
 
 Item_Kind :: enum u8 {
 	nil,
@@ -177,6 +179,9 @@ Entity :: struct {
 	frame_duration: f32,
 	is_active: bool,
 	durability: int,
+	durability_max: int,
+	durability_regen_accum: f32,
+	last_hit_time: f64,
 	break_drop_item: Item_Kind,
 	break_drop_count: int,
 	blocks_player: bool,
@@ -876,6 +881,7 @@ game_update :: proc() {
 		if e.update_proc != nil {
 			e.update_proc(e)
 		}
+		update_entity_durability_regen(e)
 	}
 
 	apply_entity_grid_snap()
@@ -1981,6 +1987,30 @@ entity_on_hit_tree :: proc(target: ^Entity, _: ^Entity) {
 	}
 }
 
+update_entity_durability_regen :: proc(e: ^Entity) {
+	if e.durability_max <= 0 do return
+	if e.durability <= 0 do return
+	if e.durability >= e.durability_max {
+		e.durability_regen_accum = 0
+		return
+	}
+
+	elapsed_since_hit := now() - e.last_hit_time
+	if elapsed_since_hit < DURABILITY_REGEN_DELAY_SEC {
+		return
+	}
+
+	e.durability_regen_accum += ctx.delta_t * DURABILITY_REGEN_PER_SEC
+	for e.durability_regen_accum >= 1.0 && e.durability < e.durability_max {
+		e.durability += 1
+		e.durability_regen_accum -= 1.0
+	}
+	if e.durability >= e.durability_max {
+		e.durability = e.durability_max
+		e.durability_regen_accum = 0
+	}
+}
+
 entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	if !is_valid(target^) {
 		return
@@ -1994,6 +2024,8 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		return
 	}
 
+	target.last_hit_time = now()
+	target.durability_regen_accum = 0
 	target.durability -= 1
 	if target.durability > 0 {
 		return
@@ -2335,9 +2367,16 @@ try_throw_equipped_dagger :: proc() {
 	consume_key_pressed(.LEFT_MOUSE)
 }
 
+set_entity_durability :: proc(e: ^Entity, value: int) {
+	e.durability = max(0, value)
+	e.durability_max = e.durability
+	e.durability_regen_accum = 0
+	e.last_hit_time = now()
+}
+
 setup_player :: proc(e: ^Entity) {
 	e.kind = .player
-	e.durability = 0
+	set_entity_durability(e, 0)
 	e.break_drop_item = .nil
 	e.break_drop_count = 0
 	e.on_hit_proc = entity_on_hit_noop
@@ -2434,7 +2473,7 @@ setup_item_pickup :: proc(using e: ^Entity) {
 	kind = .item_pickup
 	draw_pivot = .center_center
 	blocks_player = false
-	durability = 0
+	set_entity_durability(e, 0)
 	break_drop_item = .nil
 	break_drop_count = 0
 	on_hit_proc = entity_on_hit_noop
@@ -2462,7 +2501,7 @@ setup_dagger_projectile :: proc(using e: ^Entity) {
 	sprite = .dagger_item_flying
 	draw_pivot = .center_center
 	blocks_player = false
-	durability = 0
+	set_entity_durability(e, 0)
 	break_drop_item = .nil
 	break_drop_count = 0
 	on_hit_proc = entity_on_hit_noop
@@ -2522,7 +2561,7 @@ setup_movement_indicator_fx :: proc(using e: ^Entity) {
 	draw_pivot = .center_center
 	draw_offset = {}
 	blocks_player = false
-	durability = 0
+	set_entity_durability(e, 0)
 	break_drop_item = .nil
 	break_drop_count = 0
 	on_hit_proc = entity_on_hit_noop
@@ -2549,7 +2588,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 	sprite = .oblisk_rest
 	draw_pivot = .center_center
 	blocks_player = true
-	durability = 8
+	set_entity_durability(e, 8)
 	break_drop_item = .oblisk_fragment
 	break_drop_count = 1
 	on_hit_proc = entity_on_hit_noop
@@ -2587,7 +2626,7 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	sprite = .tree
 	draw_pivot = .center_center
 	blocks_player = true
-	durability = 8
+	set_entity_durability(e, 8)
 	break_drop_item = .wood
 	break_drop_count = 2
 	on_hit_proc = entity_on_hit_tree
@@ -2603,7 +2642,7 @@ setup_sapling_ent :: proc(using e: ^Entity) {
 	sprite = .sapling
 	draw_pivot = .center_center
 	blocks_player = true
-	durability = 3
+	set_entity_durability(e, 3)
 	break_drop_item = .wood
 	break_drop_count = 1
 	on_hit_proc = entity_on_hit_noop
@@ -2619,7 +2658,7 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	sprite = .sprout
 	draw_pivot = .center_center
 	blocks_player = true
-	durability = 2
+	set_entity_durability(e, 2)
 	break_drop_item = .fiber
 	break_drop_count = 1
 	on_hit_proc = entity_on_hit_noop
