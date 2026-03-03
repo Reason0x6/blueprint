@@ -56,6 +56,9 @@ Game_State :: struct {
 	debug_show_hitboxes: bool,
 	debug_show_overlap_boxes: bool,
 	debug_show_durability: bool,
+	hold_hit_target: Entity_Handle,
+	has_hold_hit_target: bool,
+	next_hold_hit_time: f64,
 	inventory: Inventory_State,
 
 	scratch: struct {
@@ -73,6 +76,7 @@ HITBOX_CORNER_CUT: f32 : 3
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 DURABILITY_REGEN_DELAY_SEC: f64 : 1.0
 DURABILITY_REGEN_PER_SEC: f32 : 1.0
+HOLD_HIT_INTERVAL_SEC: f64 : 0.6
 
 Item_Kind :: enum u8 {
 	nil,
@@ -912,13 +916,26 @@ game_update :: proc() {
  		}
 	}
 
-	if key_pressed(.LEFT_MOUSE) {
+	if key_pressed(.LEFT_MOUSE) && !ctx.gs.inventory.open {
 		pos := mouse_pos_in_current_space()
-		_ = try_hit_entity_at_mouse(pos)
+		did_hit, hit_handle := try_hit_entity_at_mouse(pos)
+		if did_hit {
+			ctx.gs.has_hold_hit_target = true
+			ctx.gs.hold_hit_target = hit_handle
+			ctx.gs.next_hold_hit_time = now() + HOLD_HIT_INTERVAL_SEC
+		} else {
+			clear_hold_hit_target()
+		}
 
 		consume_key_pressed(.LEFT_MOUSE)
 		sound_play("event:/schloop", pos=pos)
+	} else if key_pressed(.LEFT_MOUSE) && ctx.gs.inventory.open {
+		clear_hold_hit_target()
 	}
+	if key_released(.LEFT_MOUSE) {
+		clear_hold_hit_target()
+	}
+	update_hold_hit_cycle()
 
 	utils.animate_to_target_v2(&ctx.gs.cam_pos, get_player().pos, ctx.delta_t, rate=10)
 
@@ -2037,23 +2054,65 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	entity_destroy(target)
 }
 
-try_hit_entity_at_mouse :: proc(mouse_world: Vec2) -> bool {
+find_hittable_entity_at_world_pos :: proc(mouse_world: Vec2) -> (^Entity, bool) {
 	target, ok := find_entity_at_world_pos(mouse_world)
 	if !ok {
-		return false
+		return nil, false
 	}
 	if !is_valid(target^) {
-		return false
+		return nil, false
 	}
 
 	#partial switch target.kind {
 	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx:
-		return false
+		return nil, false
+	}
+
+	return target, true
+}
+
+clear_hold_hit_target :: proc() {
+	ctx.gs.has_hold_hit_target = false
+	ctx.gs.hold_hit_target = {}
+	ctx.gs.next_hold_hit_time = 0
+}
+
+try_hit_entity_at_mouse :: proc(mouse_world: Vec2) -> (did_hit: bool, hit_handle: Entity_Handle) {
+	target, ok := find_hittable_entity_at_world_pos(mouse_world)
+	if !ok {
+		return false, {}
 	}
 
 	player := get_player()
 	entity_apply_hit(target, player)
-	return true
+	return true, target.handle
+}
+
+update_hold_hit_cycle :: proc() {
+	if !key_down(.LEFT_MOUSE) || ctx.gs.inventory.open {
+		clear_hold_hit_target()
+		return
+	}
+
+	if !ctx.gs.has_hold_hit_target {
+		return
+	}
+
+	if now() < ctx.gs.next_hold_hit_time {
+		return
+	}
+
+	mouse_world := mouse_pos_in_current_space()
+	target, ok := find_hittable_entity_at_world_pos(mouse_world)
+	if !ok || target.handle.id != ctx.gs.hold_hit_target.id {
+		clear_hold_hit_target()
+		return
+	}
+
+	player := get_player()
+	entity_apply_hit(target, player)
+	ctx.gs.next_hold_hit_time = now() + HOLD_HIT_INTERVAL_SEC
+	sound_play("event:/schloop", pos=mouse_world)
 }
 
 can_player_interact_entity :: proc(player: ^Entity, target: ^Entity) -> bool {

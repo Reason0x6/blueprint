@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Double entity durability regeneration speed
+## [HEAD] Add hold-to-hit durability cycling at 0.6-second intervals
+- Added left-mouse hold hit cycling so holding on an entity repeats durability hits every `0.6s`, matching repeated click cadence.
+- Hold cycling locks to the entity initially hit, stops when the mouse leaves that entity, and clears on mouse release.
+- Added safeguards so world hold-hit cycling is disabled while the inventory UI is open.
+
+## [4522331] Double entity durability regeneration speed
 - Increased durability regeneration rate from `0.5` to `1.0` durability per second while keeping the 1-second post-hit delay.
 
 ## [2970ee5] Add delayed durability regeneration for entities after hits
