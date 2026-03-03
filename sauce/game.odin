@@ -952,6 +952,7 @@ game_update :: proc() {
 				ctx.gs.has_hold_hit_target = true
 				ctx.gs.hold_hit_target = hit_handle
 			}
+			start_player_swing_fx()
 			item, _ := get_equipped_item()
 			start_hit_cooldown_for_item(item)
 			sound_play("event:/schloop", pos=pos)
@@ -1475,7 +1476,7 @@ get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
 	return max(0, int(math.ceil(mult)))
 }
 
-start_player_swing_fx :: proc(target_pos: Vec2) {
+start_player_swing_fx :: proc() {
 	player := get_player()
 	if !is_valid(player^) {
 		return
@@ -1491,15 +1492,9 @@ start_player_swing_fx :: proc(target_pos: Vec2) {
 		return
 	}
 
-	dir := target_pos - player.pos
-	len_sq := dir.x*dir.x + dir.y*dir.y
-	if len_sq <= 0.0001 {
-		dir = Vec2{1, 0}
-		if player.last_known_x_dir < 0 {
-			dir = Vec2{-1, 0}
-		}
-	} else {
-		dir /= math.sqrt(len_sq)
+	dir := Vec2{1, 0}
+	if player.last_known_x_dir < 0 {
+		dir = Vec2{-1, 0}
 	}
 
 	ctx.gs.swing_active = true
@@ -1507,7 +1502,10 @@ start_player_swing_fx :: proc(target_pos: Vec2) {
 	ctx.gs.swing_anim_index = 0
 	ctx.gs.swing_next_frame_end_time = 0
 	ctx.gs.swing_dir = dir
-	ctx.gs.swing_rotation = math.atan2(dir.y, dir.x) * (180.0 / math.PI)
+	ctx.gs.swing_rotation = 0
+	if dir.x < 0 {
+		ctx.gs.swing_rotation = 180
+	}
 }
 
 update_player_swing_fx :: proc() {
@@ -2283,7 +2281,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	}
 
 	if is_valid(hitter^) && hitter.kind == .player {
-		start_player_swing_fx(target.pos)
+		start_player_swing_fx()
 	}
 
 	damage := get_hit_durability_damage(hitter)
@@ -2802,7 +2800,7 @@ setup_player :: proc(e: ^Entity) {
 
 		if ctx.gs.swing_active && ctx.gs.swing_sprite != .nil {
 			swing_dir := ctx.gs.swing_dir
-			hand_pos := e.pos + Vec2{0, 24} + swing_dir * 8
+			hand_pos := e.pos + Vec2{0, 24} + swing_dir * 15
 			xform := Matrix4(1)
 			xform *= utils.xform_rotate(ctx.gs.swing_rotation)
 			xform *= utils.xform_scale(Vec2{0.9, 0.9})

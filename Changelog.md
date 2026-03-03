@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Map stone multitool swings to stone_multitool_swing animation
+## [HEAD] Face swing FX by player facing and trigger swings on empty clicks
+- Changed swing orientation to use player facing direction (left/right) rather than pointing at the clicked hit target.
+- Left-click now also triggers swing FX on cooldown-ready empty-space clicks (with equipped items), not only on entity hits.
+- Offset swing visuals by `15px` away from the character face in facing direction.
+
+## [36c1c8b] Map stone multitool swings to stone_multitool_swing animation
 - Added `stone_multitool_swing` to `Sprite_Name`/`sprite_data` and mapped `item_swing_sprite(.stone_multitool)` to that sprite.
 - Player hit swings now use `stone_multitool_swing.png` (with its meta-driven animation frames) when a stone multitool is equipped.
 
