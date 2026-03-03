@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Refine debug editor placement/repeat and move crafting panel above inventory
+## [HEAD] Make debug code output compact and selectable
+- Replaced long full-line code text in the debug editor with compact selectable rows for hitbox and overlap code.
+- Added click-to-select + click-to-copy behavior for each code row using system clipboard integration.
+- Added selection status text and kept the panel compact while preserving generated code snippets.
+
+## [526e8fe] Refine debug editor placement/repeat and move crafting panel above inventory
 - Moved and compacted the hitbox/overlap debug editor into the top-left so it no longer extends off-screen.
 - Added press-and-hold behavior for debug +/- controls using frame-based repeat while left mouse is held.
 - Made the crafting panel wider and positioned it above the inventory panel, with updated slot anchors in the new layout.

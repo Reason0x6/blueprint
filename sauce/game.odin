@@ -67,10 +67,17 @@ Game_State :: struct {
 Debug_Box_Editor :: struct {
 	active: bool,
 	selected: Entity_Handle,
+	selected_code: Debug_Code_Kind,
 	hitbox_offset: Vec2,
 	hitbox_size: Vec2,
 	overlap_offset: Vec2,
 	overlap_size: Vec2,
+}
+
+Debug_Code_Kind :: enum u8 {
+	none,
+	hitbox,
+	overlap,
 }
 
 INVENTORY_SLOT_COUNT :: 12
@@ -619,6 +626,7 @@ set_debug_box_editor_selection :: proc(e: ^Entity) {
 
 	ctx.gs.debug_box_editor.active = true
 	ctx.gs.debug_box_editor.selected = e.handle
+	ctx.gs.debug_box_editor.selected_code = .none
 
 	hitbox, hit_ok := get_entity_hitbox_rect(e^)
 	if hit_ok {
@@ -633,6 +641,26 @@ set_debug_box_editor_selection :: proc(e: ^Entity) {
 		ctx.gs.debug_box_editor.overlap_size = shape.rect_size(overlap)
 		ctx.gs.debug_box_editor.overlap_offset = center - e.pos
 	}
+}
+
+draw_selectable_code_row :: proc(rect: shape.Rect, label: string, code: string, selected: bool) -> bool {
+	hover, pressed := raw_button(rect)
+
+	col := Vec4{0.08, 0.08, 0.08, 0.86}
+	if hover {
+		col = Vec4{0.14, 0.14, 0.14, 0.9}
+	}
+	if selected {
+		col = Vec4{0.16, 0.24, 0.12, 0.92}
+	}
+	draw_rect(rect, col=col, outline_col=Vec4{1, 1, 1, 0.2}, z_layer=.ui)
+
+	short := code
+	if len(short) > 44 {
+		short = fmt.tprintf("%s...", short[:44])
+	}
+	draw_text(rect.xy + Vec2{2, -1}, fmt.tprintf("%s: %s", label, short), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.82}, drop_shadow_col=Vec4{})
+	return pressed
 }
 
 box_editor_step_button :: proc(pos: Vec2, label: string, value: ^f32, step: f32) {
@@ -697,8 +725,26 @@ draw_debug_box_editor_ui :: proc() {
 
 	hit_code := fmt.tprintf("HITBOX code: case .%v: return shape.rect_make(e.pos + Vec2{%.1f, %.1f}, Vec2{%.1f, %.1f}, pivot=.center_center), true", e.kind, ctx.gs.debug_box_editor.hitbox_offset.x, ctx.gs.debug_box_editor.hitbox_offset.y, max(1.0, ctx.gs.debug_box_editor.hitbox_size.x), max(1.0, ctx.gs.debug_box_editor.hitbox_size.y))
 	ov_code := fmt.tprintf("OVERLAP code: .%v = {overlap_box_size=Vec2{%.1f, %.1f}, overlap_box_offset=Vec2{%.1f, %.1f}, overlap_box_pivot=.center_center}", e.sprite, max(1.0, ctx.gs.debug_box_editor.overlap_size.x), max(1.0, ctx.gs.debug_box_editor.overlap_size.y), ctx.gs.debug_box_editor.overlap_offset.x, ctx.gs.debug_box_editor.overlap_offset.y)
-	draw_text(p.xy + Vec2{4, -110}, hit_code, pivot=.top_left, z_layer=.ui, col=Vec4{0.75, 1, 0.75, 0.85}, drop_shadow_col=Vec4{})
-	draw_text(p.xy + Vec2{4, -118}, ov_code, pivot=.top_left, z_layer=.ui, col=Vec4{0.75, 1, 1, 0.85}, drop_shadow_col=Vec4{})
+
+	hit_row := shape.rect_make(p.xy + Vec2{4, -108}, Vec2{176, 9}, pivot=.top_left)
+	ov_row := shape.rect_make(p.xy + Vec2{4, -118}, Vec2{176, 9}, pivot=.top_left)
+
+	if draw_selectable_code_row(hit_row, "Hitbox", hit_code, ctx.gs.debug_box_editor.selected_code == .hitbox) {
+		ctx.gs.debug_box_editor.selected_code = .hitbox
+		sapp.set_clipboard_string(strings.clone_to_cstring(hit_code, allocator=context.temp_allocator))
+	}
+	if draw_selectable_code_row(ov_row, "Overlap", ov_code, ctx.gs.debug_box_editor.selected_code == .overlap) {
+		ctx.gs.debug_box_editor.selected_code = .overlap
+		sapp.set_clipboard_string(strings.clone_to_cstring(ov_code, allocator=context.temp_allocator))
+	}
+
+	status := "Click row to select + copy"
+	if ctx.gs.debug_box_editor.selected_code == .hitbox {
+		status = "Selected: Hitbox"
+	} else if ctx.gs.debug_box_editor.selected_code == .overlap {
+		status = "Selected: Overlap"
+	}
+	draw_text(p.xy + Vec2{4, -129}, status, pivot=.top_left, z_layer=.ui, col=Vec4{0.85, 0.95, 1, 0.7}, drop_shadow_col=Vec4{})
 }
 
 app_shutdown :: proc() {
