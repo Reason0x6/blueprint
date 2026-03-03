@@ -98,6 +98,7 @@ Inventory_State :: struct {
 	drag_slot: Inventory_Slot,
 	crafting_slots: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot,
 	crafting_output: Inventory_Slot,
+	crafting_recipe_index: int,
 }
 
 CRAFT_INPUT_COLS :: 2
@@ -110,6 +111,18 @@ Drag_From_Kind :: enum u8 {
 	craft_input,
 	craft_output,
 }
+
+Crafting_Ingredient :: struct {
+	item: Item_Kind,
+	count: int,
+}
+
+Crafting_Recipe :: struct {
+	inputs: [dynamic]Crafting_Ingredient,
+	output: Crafting_Ingredient,
+}
+
+crafting_recipes: [dynamic]Crafting_Recipe
 
 //
 // action -> key mapping
@@ -451,6 +464,190 @@ parse_simple_f32 :: proc(s: string) -> (v: f32, ok: bool) #optional_ok {
 	return sign * (int_part + frac_part/frac_scale), true
 }
 
+trim_ascii_ws :: proc(s: string) -> string {
+	start := 0
+	for start < len(s) {
+		c := s[start]
+		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
+			break
+		}
+		start += 1
+	}
+
+	stop := len(s)
+	for stop > start {
+		c := s[stop-1]
+		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
+			break
+		}
+		stop -= 1
+	}
+
+	return s[start:stop]
+}
+
+parse_positive_int_str :: proc(s: string) -> (v: int, ok: bool) #optional_ok {
+	ss := trim_ascii_ws(s)
+	if len(ss) == 0 {
+		return 0, false
+	}
+
+	value := 0
+	for c in ss {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		value = value*10 + int(c-'0')
+	}
+	return value, true
+}
+
+item_kind_from_token :: proc(tok: string) -> (item: Item_Kind, ok: bool) #optional_ok {
+	t := trim_ascii_ws(tok)
+	switch t {
+	case "wood": return .wood, true
+	case "stone": return .stone, true
+	case "fiber": return .fiber, true
+	case "stick": return .stick, true
+	case "rope": return .rope, true
+	case "stone_blade": return .stone_blade, true
+	case "oblisk_fragment": return .oblisk_fragment, true
+	case "oblisk_core": return .oblisk_core, true
+	case "dagger_item": return .dagger_item, true
+	case:
+		return .nil, false
+	}
+}
+
+parse_ingredient_token :: proc(tok: string) -> (Crafting_Ingredient, bool) {
+	t := trim_ascii_ws(tok)
+	if len(t) == 0 {
+		return {}, false
+	}
+
+	sep := strings.index(t, ":")
+	item_tok := t
+	count_tok := "1"
+	if sep >= 0 {
+		item_tok = trim_ascii_ws(t[:sep])
+		count_tok = trim_ascii_ws(t[sep+1:])
+	}
+
+	item, item_ok := item_kind_from_token(item_tok)
+	if !item_ok {
+		return {}, false
+	}
+	count, count_ok := parse_positive_int_str(count_tok)
+	if !count_ok || count <= 0 {
+		return {}, false
+	}
+
+	return Crafting_Ingredient{item=item, count=count}, true
+}
+
+parse_ingredient_list :: proc(side: string) -> (out: [dynamic]Crafting_Ingredient, ok: bool) {
+	out = make([dynamic]Crafting_Ingredient, 0, 4, allocator=context.allocator)
+	parts := strings.split(side, "+")
+	for part0 in parts {
+		part := trim_ascii_ws(part0)
+		if len(part) == 0 do continue
+
+		ing, ing_ok := parse_ingredient_token(part)
+		if !ing_ok {
+			return out, false
+		}
+
+		merged := false
+		for i in 0..<len(out) {
+			if out[i].item == ing.item {
+				out[i].count += ing.count
+				merged = true
+				break
+			}
+		}
+		if !merged {
+			append(&out, ing)
+		}
+	}
+	return out, len(out) > 0
+}
+
+push_recipe :: proc(inputs: []Crafting_Ingredient, output: Crafting_Ingredient) {
+	r := Crafting_Recipe{
+		inputs = make([dynamic]Crafting_Ingredient, 0, len(inputs), allocator=context.allocator),
+		output = output,
+	}
+	for ing in inputs {
+		append(&r.inputs, ing)
+	}
+	append(&crafting_recipes, r)
+}
+
+load_default_crafting_recipes :: proc() {
+	crafting_recipes = make([dynamic]Crafting_Recipe, 0, 8, allocator=context.allocator)
+	push_recipe([]Crafting_Ingredient{
+		{item=.wood, count=2},
+	}, {item=.stick, count=2})
+	push_recipe([]Crafting_Ingredient{
+		{item=.fiber, count=2},
+	}, {item=.rope, count=1})
+	push_recipe([]Crafting_Ingredient{
+		{item=.stone, count=1},
+		{item=.stick, count=1},
+	}, {item=.stone_blade, count=1})
+	push_recipe([]Crafting_Ingredient{
+		{item=.stone_blade, count=1},
+		{item=.stick, count=1},
+		{item=.rope, count=1},
+	}, {item=.dagger_item, count=1})
+}
+
+load_crafting_recipes :: proc() {
+	crafting_recipes = make([dynamic]Crafting_Recipe, 0, 8, allocator=context.allocator)
+
+	path := "res/data/crafting_recipes.txt"
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil || len(data) == 0 {
+		load_default_crafting_recipes()
+		return
+	}
+
+	text := string(data)
+	line_no := 0
+	for raw_line in strings.split(text, "\n") {
+		line_no += 1
+		line := trim_ascii_ws(raw_line)
+		if len(line) == 0 do continue
+		if strings.has_prefix(line, "#") do continue
+
+		arrow := strings.index(line, "->")
+		if arrow < 0 {
+			log.warnf("crafting_recipes line %v invalid (missing ->): %q", line_no, line)
+			continue
+		}
+
+		left := trim_ascii_ws(line[:arrow])
+		right := trim_ascii_ws(line[arrow+2:])
+		inputs, in_ok := parse_ingredient_list(left)
+		if !in_ok {
+			log.warnf("crafting_recipes line %v invalid inputs: %q", line_no, left)
+			continue
+		}
+		output, out_ok := parse_ingredient_token(right)
+		if !out_ok {
+			log.warnf("crafting_recipes line %v invalid output: %q", line_no, right)
+			continue
+		}
+
+		push_recipe(inputs[:], output)
+	}
+
+	if len(crafting_recipes) == 0 {
+		log.warn("no valid crafting recipes loaded; using defaults")
+		load_default_crafting_recipes()
+	}
+}
+
 load_sprite_frame_meta :: proc() {
 	for sprite in Sprite_Name {
 		if sprite == .nil do continue
@@ -519,6 +716,7 @@ get_sprite_center_mass :: proc(img: Sprite_Name) -> Vec2 {
 
 app_init :: proc() {
 	load_sprite_frame_meta()
+	load_crafting_recipes()
 }
 
 app_frame :: proc() {
@@ -1136,40 +1334,30 @@ update_crafting_output :: proc(inv: ^Inventory_State) {
 	input := inv.crafting_slots[:]
 	total_count := get_total_non_empty_count_in_slots(input)
 	if total_count == 0 {
+		inv.crafting_recipe_index = -1
 		crafting_set_output(inv, .nil, 0)
 		return
 	}
+	for i in 0..<len(crafting_recipes) {
+		r := crafting_recipes[i]
+		required_total := 0
+		matches := true
+		for ing in r.inputs {
+			required_total += ing.count
+			if get_total_count_in_slots(input, ing.item) != ing.count {
+				matches = false
+				break
+			}
+		}
+		if !matches do continue
+		if required_total != total_count do continue
 
-	wood := get_total_count_in_slots(input, .wood)
-	stone := get_total_count_in_slots(input, .stone)
-	fiber := get_total_count_in_slots(input, .fiber)
-	stick := get_total_count_in_slots(input, .stick)
-	rope := get_total_count_in_slots(input, .rope)
-
-	// 2 wood -> 2 stick
-	if wood == 2 && total_count == 2 {
-		crafting_set_output(inv, .stick, 2)
+		inv.crafting_recipe_index = i
+		crafting_set_output(inv, r.output.item, r.output.count)
 		return
 	}
 
-	// 2 fiber -> 1 rope
-	if fiber == 2 && total_count == 2 {
-		crafting_set_output(inv, .rope, 1)
-		return
-	}
-
-	// 1 stone + 1 stick -> 1 stone blade
-	if stone == 1 && stick == 1 && total_count == 2 {
-		crafting_set_output(inv, .stone_blade, 1)
-		return
-	}
-
-	// 1 stone blade + 1 stick + 1 rope -> 1 dagger
-	if get_total_count_in_slots(input, .stone_blade) == 1 && stick == 1 && rope == 1 && total_count == 3 {
-		crafting_set_output(inv, .dagger_item, 1)
-		return
-	}
-
+	inv.crafting_recipe_index = -1
 	crafting_set_output(inv, .nil, 0)
 }
 
@@ -1197,24 +1385,21 @@ try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, outpu
 	if output.item == .nil || output.count <= 0 {
 		return false
 	}
-
-	#partial switch output.item {
-	case .stick:
-		return consume_item_from_crafting_slots(inv, .wood, 2)
-	case .rope:
-		return consume_item_from_crafting_slots(inv, .fiber, 2)
-	case .stone_blade:
-		a := consume_item_from_crafting_slots(inv, .stone, 1)
-		b := consume_item_from_crafting_slots(inv, .stick, 1)
-		return a && b
-	case .dagger_item:
-		a := consume_item_from_crafting_slots(inv, .stone_blade, 1)
-		b := consume_item_from_crafting_slots(inv, .stick, 1)
-		c := consume_item_from_crafting_slots(inv, .rope, 1)
-		return a && b && c
-	case:
+	if inv.crafting_recipe_index < 0 || inv.crafting_recipe_index >= len(crafting_recipes) {
 		return false
 	}
+
+	r := crafting_recipes[inv.crafting_recipe_index]
+	if r.output.item != output.item || r.output.count != output.count {
+		return false
+	}
+
+	for ing in r.inputs {
+		if !consume_item_from_crafting_slots(inv, ing.item, ing.count) {
+			return false
+		}
+	}
+	return true
 }
 
 inventory_update :: proc() {

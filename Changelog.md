@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add rounded-corner hitbox collision and grid-snapped entity constraints
+## [HEAD] Add data-driven crafting recipe file format and loader
+- Added a simple editable recipe file at `res/data/crafting_recipes.txt` using `input_item:count + input_item:count -> output_item:count` syntax.
+- Replaced hardcoded crafting recipe matching/consumption with generic runtime recipes loaded from the file at startup.
+- Added parser helpers, token-to-item mapping, and default fallback recipes when the file is missing or invalid.
+
+## [71af3c6] Add rounded-corner hitbox collision and grid-snapped entity constraints
 - Added rounded-corner (corner-cut) hitbox collision helpers and switched player/blocker and projectile/blocker checks to use the rounded collision path.
 - Added rounded point-block checks for click-to-move target validation so pathing respects rounded hitbox corners.
 - Added a grid snap pass for entities (excluding player/projectiles/indicator FX) so world entities are constrained to a consistent grid.

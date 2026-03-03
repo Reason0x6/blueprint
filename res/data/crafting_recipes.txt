@@ -1,0 +1,12 @@
+# Crafting recipe format:
+#   input_item:count + input_item:count -> output_item:count
+# Notes:
+# - Whitespace is ignored.
+# - `+` combines inputs.
+# - `#` starts a comment line.
+# - Item tokens must match Item_Kind names used by the game.
+
+wood:2 -> stick:2
+fiber:2 -> rope:1
+stone:1 + stick:1 -> stone_blade:1
+stone_blade:1 + stick:1 + rope:1 -> dagger_item:1
