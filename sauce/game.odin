@@ -56,6 +56,7 @@ Game_State :: struct {
 	debug_show_hitboxes: bool,
 	debug_show_overlap_boxes: bool,
 	debug_show_durability: bool,
+	debug_show_grid: bool,
 	hold_hit_target: Entity_Handle,
 	has_hold_hit_target: bool,
 	hit_cooldown_end_time: f64,
@@ -888,6 +889,19 @@ draw_pause_menu_ui :: proc() {
 	draw_rect(dura_rect, col=dura_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
 	dura_label := ctx.gs.debug_show_durability ? "Durability: ON" : "Durability: OFF"
 	draw_text(dura_rect.xy, dura_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+
+	grid_rect := shape.rect_make(debug_start + Vec2{0, -54}, debug_button_size, pivot=.center_center)
+	grid_hover, grid_pressed := raw_button(grid_rect)
+	if grid_pressed {
+		ctx.gs.debug_show_grid = !ctx.gs.debug_show_grid
+	}
+	grid_col := Vec4{0.05, 0.05, 0.05, 0.78}
+	if grid_hover {
+		grid_col = Vec4{0.2, 0.2, 0.2, 0.85}
+	}
+	draw_rect(grid_rect, col=grid_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	grid_label := ctx.gs.debug_show_grid ? "Grid: ON" : "Grid: OFF"
+	draw_text(grid_rect.xy, grid_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
 }
 
 app_shutdown :: proc() {
@@ -920,6 +934,7 @@ game_update :: proc() {
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.bg_use_forest_grass = roll_chance(1.0/3.0, 0xB16B00B5)
+		ctx.gs.debug_show_grid = true
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
@@ -1058,7 +1073,9 @@ game_draw :: proc() {
 	// world
 	{
 		push_coord_space(get_world_space())
-		draw_world_grid()
+		if ctx.gs.debug_show_grid {
+			draw_world_grid()
+		}
 		draw_placeable_preview()
 
 		draw_order := make([dynamic]Entity_Handle, 0, len(get_all_ents()), allocator=context.temp_allocator)
