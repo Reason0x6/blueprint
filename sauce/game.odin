@@ -1417,18 +1417,12 @@ item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
 }
 
 item_hit_durability_multiplier :: proc(item: Item_Kind) -> f32 {
-	switch item {
-	case .nil: return 1.0
-	case .wood: return 1.0
-	case .stone: return 1.0
-	case .fiber: return 1.0
-	case .stick: return 1.0
-	case .rope: return 1.0
-	case .stone_blade: return 1.5
-	case .stone_multitool: return 2.0
-	case .oblisk_fragment: return 1.0
-	case .oblisk_core: return 1.2
-	case .dagger_item: return 1.4
+	#partial switch item {
+	case .wood: return 0
+	case .fiber: return 0
+	case .rope: return 0
+	case .stone_blade: return 0.5
+	case .stone_multitool: return 3.0
 	case: return 1.0
 	}
 }

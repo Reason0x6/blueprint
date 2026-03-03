@@ -1,8 +1,12 @@
 # Changelog
 
-## [HEAD] Scale durability damage per hit by held item multiplier
+## [HEAD] Simplify durability multiplier config to only non-default items
+- Simplified `item_hit_durability_multiplier` so only items with non-`1.0` values are explicitly listed.
+- All unspecified items now use the default multiplier path (`1.0`).
+
+## [f293f6f] Scale durability damage per hit by held item multiplier
 - Added `item_hit_durability_multiplier` and applied it in `entity_apply_hit` so held items now scale how much durability each hit removes.
-- Hit damage now resolves from the player’s equipped item and applies integer durability loss via multiplier-based damage.
+- Hit damage now resolves from the player's equipped item and applies integer durability loss via multiplier-based damage.
 
 ## [cfc8421] Boost hit flash effect when durability is below 3
 - Increased white hit-flash intensity and outline thickness for low-durability entities (`durability < 3`).
