@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add hold-to-hit durability cycling at 0.6-second intervals
+## [HEAD] Add stone blade/multitool textures and bounce hit-drops toward player
+- Added sprite support for `stone_blade.png` and `stone_multitool.png`, and mapped `stone_blade` / `stone_multitool` item icons to those textures.
+- Added `spawn_item_pickup_towards_player` for entity hit drops so dropped items get initial velocity toward the player and a short pickup delay.
+- Updated tree on-hit wood drops and durability break drops to use the bounce-to-player drop path.
+
+## [cfd84ec] Add hold-to-hit durability cycling at 0.6-second intervals
 - Added left-mouse hold hit cycling so holding on an entity repeats durability hits every `0.6s`, matching repeated click cadence.
 - Hold cycling locks to the entity initially hit, stops when the mouse leaves that entity, and clears on mouse release.
 - Added safeguards so world hold-hit cycling is disabled while the inventory UI is open.

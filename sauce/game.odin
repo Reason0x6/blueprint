@@ -77,6 +77,9 @@ TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 DURABILITY_REGEN_DELAY_SEC: f64 : 1.0
 DURABILITY_REGEN_PER_SEC: f32 : 1.0
 HOLD_HIT_INTERVAL_SEC: f64 : 0.6
+ITEM_DROP_BOUNCE_SPEED: f32 : 95
+ITEM_DROP_BOUNCE_DRAG: f32 : 6.5
+ITEM_DROP_PICKUP_DELAY_SEC: f64 : 0.25
 
 Item_Kind :: enum u8 {
 	nil,
@@ -192,6 +195,7 @@ Entity :: struct {
 	on_hit_proc: proc(^Entity, ^Entity),
 	pickup_item: Item_Kind,
 	pickup_count: int,
+	pickup_ready_time: f64,
 	vel: Vec2,
 	max_distance: f32,
 	distance_travelled: f32,
@@ -279,6 +283,8 @@ Sprite_Name :: enum {
 	sticks,
 	fibre,
 	rope,
+	stone_blade,
+	stone_multitool,
 	sapling,
 	sprout,
 	tree,
@@ -305,6 +311,8 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.sticks = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.fibre = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.rope = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.stone_blade = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.stone_multitool = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.movement_indicator = {frame_count=6},
 	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, -6}, overlap_box_pivot=.bottom_center},
 	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, -10}, overlap_box_pivot=.bottom_center},
@@ -1329,8 +1337,8 @@ item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	case .fiber: return .fibre
 	case .stick: return .sticks
 	case .rope: return .rope
-	case .stone_blade: return .dagger_item
-	case .stone_multitool: return .stone
+	case .stone_blade: return .stone_blade
+	case .stone_multitool: return .stone_multitool
 	case .oblisk_fragment: return .oblisk_broken
 	case .oblisk_core: return .oblisk
 	case .dagger_item: return .dagger_item
@@ -1578,6 +1586,7 @@ inventory_update :: proc() {
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
 		if e.kind != .item_pickup do continue
+		if now() < e.pickup_ready_time do continue
 
 		diff := e.pos - player.pos
 		d2 := diff.x*diff.x + diff.y*diff.y
@@ -1966,7 +1975,25 @@ spawn_item_pickup :: proc(item: Item_Kind, count: int, pos: Vec2) -> ^Entity {
 	e.pos = pos
 	e.pickup_item = item
 	e.pickup_count = max(1, count)
+	e.pickup_ready_time = 0
 	e.sprite = item_icon_sprite(item)
+	return e
+}
+
+spawn_item_pickup_towards_player :: proc(item: Item_Kind, count: int, pos: Vec2) -> ^Entity {
+	e := spawn_item_pickup(item, count, pos)
+
+	player := get_player()
+	if is_valid(player^) {
+		to_player := player.pos - pos
+		len_sq := to_player.x*to_player.x + to_player.y*to_player.y
+		if len_sq > 0.0001 {
+			to_player /= math.sqrt(len_sq)
+			e.vel = to_player * ITEM_DROP_BOUNCE_SPEED
+		}
+	}
+
+	e.pickup_ready_time = now() + ITEM_DROP_PICKUP_DELAY_SEC
 	return e
 }
 
@@ -2000,7 +2027,7 @@ entity_on_hit_noop :: proc(_: ^Entity, _: ^Entity) {}
 
 entity_on_hit_tree :: proc(target: ^Entity, _: ^Entity) {
 	if roll_chance(TREE_WOOD_HIT_DROP_CHANCE, u64(target.handle.id)) {
-		spawn_item_pickup(.wood, 1, target.pos + Vec2{0, 8})
+		spawn_item_pickup_towards_player(.wood, 1, target.pos + Vec2{0, 8})
 	}
 }
 
@@ -2049,7 +2076,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	}
 
 	if target.break_drop_item != .nil && target.break_drop_count > 0 {
-		spawn_item_pickup(target.break_drop_item, target.break_drop_count, target.pos + Vec2{0, 8})
+		spawn_item_pickup_towards_player(target.break_drop_item, target.break_drop_count, target.pos + Vec2{0, 8})
 	}
 	entity_destroy(target)
 }
@@ -2539,6 +2566,15 @@ setup_item_pickup :: proc(using e: ^Entity) {
 
 	e.update_proc = proc(e: ^Entity) {
 		e.sprite = item_icon_sprite(e.pickup_item)
+
+		if e.vel != {} {
+			e.pos += e.vel * ctx.delta_t
+			drag_mul := max(0.0, 1.0 - ITEM_DROP_BOUNCE_DRAG*ctx.delta_t)
+			e.vel *= drag_mul
+			if linalg.length(e.vel) < 1.0 {
+				e.vel = {}
+			}
+		}
 	}
 
 	e.draw_proc = proc(e: Entity) {
