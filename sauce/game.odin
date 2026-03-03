@@ -894,7 +894,7 @@ game_update :: proc() {
 		spawn_item_pickup(.wood, 4, Vec2{-68, 8})
 		spawn_item_pickup(.stone, 3, Vec2{-86, 8})
 		spawn_item_pickup(.fiber, 4, Vec2{-104, 8})
-		spawn_item_pickup(.dagger_item, 1, Vec2{-55, 6})
+		spawn_item_pickup(.stone_multitool, 1, Vec2{-55, 6})
 		
 	}
 
@@ -1425,7 +1425,7 @@ item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
 	case .stick: return 0.45
 	case .rope: return 0.5
 	case .stone_blade: return 0.35
-	case .stone_multitool: return 0.25
+	case .stone_multitool: return 0.4
 	case .oblisk_fragment: return 0.5
 	case .oblisk_core: return 0.6
 	case .dagger_item: return 0.45
@@ -1439,7 +1439,7 @@ item_hit_durability_multiplier :: proc(item: Item_Kind) -> f32 {
 	case .fiber: return 0
 	case .rope: return 0
 	case .stone_blade: return 0.5
-	case .stone_multitool: return 3.0
+	case .stone_multitool: return 2.0
 	case: return 1.0
 	}
 }
@@ -1476,7 +1476,7 @@ get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
 	return max(0, int(math.ceil(mult)))
 }
 
-start_player_swing_fx :: proc() {
+start_player_swing_fx :: proc(target_x: f32 = 0, use_target_side:=false) {
 	player := get_player()
 	if !is_valid(player^) {
 		return
@@ -1492,10 +1492,15 @@ start_player_swing_fx :: proc() {
 		return
 	}
 
-	dir := Vec2{1, 0}
-	if player.last_known_x_dir < 0 {
-		dir = Vec2{-1, 0}
+	dir_x: f32 = 1
+	if use_target_side {
+		if target_x < player.pos.x {
+			dir_x = -1
+		}
+	} else if player.last_known_x_dir < 0 {
+		dir_x = -1
 	}
+	dir := Vec2{dir_x, 0}
 
 	ctx.gs.swing_active = true
 	ctx.gs.swing_sprite = sprite
@@ -2281,7 +2286,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	}
 
 	if is_valid(hitter^) && hitter.kind == .player {
-		start_player_swing_fx()
+		start_player_swing_fx(target.pos.x, true)
 	}
 
 	damage := get_hit_durability_damage(hitter)
@@ -2800,7 +2805,7 @@ setup_player :: proc(e: ^Entity) {
 
 		if ctx.gs.swing_active && ctx.gs.swing_sprite != .nil {
 			swing_dir := ctx.gs.swing_dir
-			hand_pos := e.pos + Vec2{0, 24} + swing_dir * 15
+			hand_pos := e.pos + Vec2{0, 8} + swing_dir * 25
 			xform := Matrix4(1)
 			xform *= utils.xform_rotate(ctx.gs.swing_rotation)
 			xform *= utils.xform_scale(Vec2{0.9, 0.9})
