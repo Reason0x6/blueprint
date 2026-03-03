@@ -1,6 +1,12 @@
 # Changelog
 
-## [HEAD] Normalize player run facing to match idle orientation
+## [HEAD] Randomize repeating background texture and remove player tint filter
+- Added `forest_grass_texture` sprite support and random startup selection between `bg_repeat_tex0` and `forest_grass_texture`.
+- Background repeat UV assignment now uses the randomly selected sprite for the session.
+- Tuned forest grass selection chance to roughly `1 in 3` sessions.
+- Removed the player update-time `scratch.col_override` blue tint so the player texture now renders without that color filter.
+
+## [3b7fd54] Normalize player run facing to match idle orientation
 - Added a run-sprite specific flip correction so `player_run` faces the same direction as `player_idle`.
 
 ## [b19153c] Suppress hit highlight for zero-damage hits

@@ -60,6 +60,7 @@ Game_State :: struct {
 	has_hold_hit_target: bool,
 	hit_cooldown_end_time: f64,
 	hit_cooldown_duration: f64,
+	bg_use_forest_grass: bool,
 	inventory: Inventory_State,
 
 	scratch: struct {
@@ -277,6 +278,7 @@ Sprite_Name :: enum {
 	player_still,
 	shadow_medium,
 	bg_repeat_tex0,
+	forest_grass_texture,
 	dagger_item,
 	dagger_item_flying,
 	movement_indicator,
@@ -870,6 +872,7 @@ game_update :: proc() {
 		player := entity_create(.player)
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
+		ctx.gs.bg_use_forest_grass = roll_chance(1.0/3.0, 0xB16B00B5)
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
@@ -974,7 +977,11 @@ game_draw :: proc() {
 
 	// this is so we can get the current pixel in the shader in world space (VERYYY useful)
 	draw_frame.ndc_to_world_xform = get_world_space_camera() * linalg.inverse(get_world_space_proj())
-	draw_frame.bg_repeat_tex0_atlas_uv = atlas_uv_from_sprite(.bg_repeat_tex0)
+	bg_sprite := Sprite_Name.bg_repeat_tex0
+	if ctx.gs.bg_use_forest_grass {
+		bg_sprite = .forest_grass_texture
+	}
+	draw_frame.bg_repeat_tex0_atlas_uv = atlas_uv_from_sprite(bg_sprite)
 
 	// background thing
 	{
@@ -2705,7 +2712,6 @@ setup_player :: proc(e: ^Entity) {
 			entity_set_animation(e, .player_idle, 0.3)
 		}
 
-		e.scratch.col_override = Vec4{0,0,1,0.2}
 	}
 
 	e.draw_proc = proc(e: Entity) {
