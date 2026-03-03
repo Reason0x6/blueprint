@@ -19,6 +19,7 @@ import "core:math"
 import "core:math/linalg"
 import "core:os"
 import "core:strings"
+import stbi "vendor:stb/image"
 
 import spall "core:prof/spall"
 
@@ -194,6 +195,13 @@ Terrain_Structure_Instance :: struct {
 }
 
 terrain_structures: [dynamic]Terrain_Structure
+
+Water_Collision_Mask :: struct {
+	width: int,
+	height: int,
+	alpha: [dynamic]u8,
+}
+water_collision_mask: Water_Collision_Mask
 
 //
 // action -> key mapping
@@ -939,6 +947,36 @@ load_terrain_structures :: proc() {
 	}
 }
 
+load_water_collision_mask :: proc() {
+	water_collision_mask = {}
+
+	path := "res/images/water.png"
+	png_data, png_err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if png_err != nil || len(png_data) == 0 {
+		log.warnf("water collision mask missing %q; using full-tile water collision fallback", path)
+		return
+	}
+
+	stbi.set_flip_vertically_on_load(1)
+	width, height, channels: i32
+	img_data := stbi.load_from_memory(raw_data(png_data), auto_cast len(png_data), &width, &height, &channels, 4)
+	if img_data == nil || width <= 0 || height <= 0 {
+		log.warn("failed to decode water.png for collision mask; using full-tile fallback")
+		return
+	}
+	defer stbi.image_free(img_data)
+
+	alpha := make([dynamic]u8, 0, int(width)*int(height), allocator=context.allocator)
+	for i in 0..<int(width)*int(height) {
+		a := img_data[i*4 + 3]
+		append(&alpha, a)
+	}
+
+	water_collision_mask.width = int(width)
+	water_collision_mask.height = int(height)
+	water_collision_mask.alpha = alpha
+}
+
 load_sprite_frame_meta :: proc() {
 	for sprite in Sprite_Name {
 		if sprite == .nil do continue
@@ -1009,6 +1047,7 @@ app_init :: proc() {
 	load_sprite_frame_meta()
 	load_crafting_recipes()
 	load_terrain_structures()
+	load_water_collision_mask()
 }
 
 app_frame :: proc() {
@@ -1510,6 +1549,59 @@ terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {
 is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
 	tile := terrain_tile_for_tile(tile_x, tile_y)
 	return tile.kind == .block && tile.block_index > 0
+}
+
+is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> bool {
+	tile := terrain_tile_for_tile(tile_x, tile_y)
+	if tile.kind != .water {
+		return false
+	}
+
+	grid := ENTITY_GRID_SIZE
+	if grid <= 0 {
+		return false
+	}
+
+	// Fallback if mask is missing: water tile is fully blocked.
+	if water_collision_mask.width <= 0 || water_collision_mask.height <= 0 || len(water_collision_mask.alpha) == 0 {
+		return true
+	}
+
+	tile_min_x := f32(tile_x) * grid
+	tile_min_y := f32(tile_y) * grid
+	u := math.clamp((world_pos.x-tile_min_x)/grid, 0, 0.9999)
+	v := math.clamp((world_pos.y-tile_min_y)/grid, 0, 0.9999)
+
+	px := clamp(int(math.floor(u * f32(water_collision_mask.width))), 0, water_collision_mask.width-1)
+	py := clamp(int(math.floor(v * f32(water_collision_mask.height))), 0, water_collision_mask.height-1)
+	idx := py*water_collision_mask.width + px
+	if idx < 0 || idx >= len(water_collision_mask.alpha) {
+		return true
+	}
+
+	return water_collision_mask.alpha[idx] > 0
+}
+
+is_world_pos_in_water_collision :: proc(pos: Vec2) -> bool {
+	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
+	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
+	return is_water_pixel_blocked(tile_x, tile_y, pos)
+}
+
+is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
+	step := max(1.0, ENTITY_GRID_SIZE / 8.0)
+	y := rect.y
+	for y <= rect.w {
+		x := rect.x
+		for x <= rect.z {
+			if is_world_pos_in_water_collision(Vec2{x, y}) {
+				return true
+			}
+			x += step
+		}
+		y += step
+	}
+	return false
 }
 
 draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, world_rect: shape.Rect, col:=color.WHITE) {
@@ -2053,6 +2145,7 @@ resolve_player_vs_hitboxes :: proc() {
 	if !is_valid(player^) {
 		return
 	}
+	prev_pos := player.pos
 
 	player_hitbox, ok := get_entity_hitbox_rect(player^)
 	if !ok {
@@ -2085,6 +2178,14 @@ resolve_player_vs_hitboxes :: proc() {
 		}
 
 		if !collided_any do break
+	}
+
+	// Water collision is texture-accurate using water alpha mask sampling.
+	player_hitbox, ok = get_entity_hitbox_rect(player^)
+	if ok && is_rect_touching_water_collision(player_hitbox) {
+		player.pos = prev_pos
+		player.has_move_target = false
+		player.has_queued_move_target = false
 	}
 
 	try_interact_pending_target(player)
@@ -3406,6 +3507,10 @@ set_player_move_target_with_detour :: proc(player: ^Entity, target: Vec2) {
 }
 
 is_world_position_blocked_for_player :: proc(pos: Vec2) -> bool {
+	if is_world_pos_in_water_collision(pos) {
+		return true
+	}
+
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
 		if !e.blocks_player do continue
