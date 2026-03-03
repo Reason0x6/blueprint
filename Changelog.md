@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Add player item swing FX that points at melee hit targets
+## [HEAD] Map stone multitool swings to stone_multitool_swing animation
+- Added `stone_multitool_swing` to `Sprite_Name`/`sprite_data` and mapped `item_swing_sprite(.stone_multitool)` to that sprite.
+- Player hit swings now use `stone_multitool_swing.png` (with its meta-driven animation frames) when a stone multitool is equipped.
+
+## [9379dd0] Add player item swing FX that points at melee hit targets
 - Added a player swing FX state and animation playback that triggers when the player hits an entity.
 - Swing visuals rotate toward the hit target direction and render from the player hand position.
 - Added item swing sprite selection helper (currently falls back to the item icon sprite until dedicated `<item>_swing` sprite enums are wired).

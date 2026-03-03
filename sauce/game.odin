@@ -298,6 +298,7 @@ Sprite_Name :: enum {
 	rope,
 	stone_blade,
 	stone_multitool,
+	stone_multitool_swing,
 	sapling,
 	sprout,
 	tree,
@@ -326,6 +327,7 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.rope = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.stone_blade = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.stone_multitool = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.stone_multitool_swing = {frame_count=4},
 	.movement_indicator = {frame_count=6},
 	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, -6}, overlap_box_pivot=.bottom_center},
 	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, -10}, overlap_box_pivot=.bottom_center},
@@ -1442,8 +1444,12 @@ item_hit_durability_multiplier :: proc(item: Item_Kind) -> f32 {
 }
 
 item_swing_sprite :: proc(item: Item_Kind) -> Sprite_Name {
-	// Fallback to item icon sprite unless dedicated <item>_swing sprites are wired in Sprite_Name.
-	return item_icon_sprite(item)
+	#partial switch item {
+	case .stone_multitool:
+		return .stone_multitool_swing
+	case:
+		return item_icon_sprite(item)
+	}
 }
 
 start_hit_cooldown_for_item :: proc(item: Item_Kind) {
