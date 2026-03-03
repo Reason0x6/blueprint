@@ -265,7 +265,7 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 	switch kind {
 		case .nil:
 		case .player: setup_player(e)
-		case .oblisk_ent: setup_oblisk_ent(e) // for now, just use the same setup as the normal oblisk ent
+		case .oblisk_ent: setup_oblisk_ent(e)
 		case .tree_ent: setup_tree_ent(e)
 		case .sapling_ent: setup_sapling_ent(e)
 		case .sprout_ent: setup_sprout_ent(e)
@@ -363,13 +363,13 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.stone_multitool_swing = {frame_count=4},
 	.movement_indicator = {frame_count=6},
 	.grass = {frame_count=6},
-	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, -6}, overlap_box_pivot=.bottom_center},
-	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, -10}, overlap_box_pivot=.bottom_center},
-	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, -51}, overlap_box_pivot=.bottom_center},
+	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 
-	.oblisk = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
-	.oblisk_rest = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
-	.oblisk_broken = {overlap_box_size=Vec2{12, 12}, overlap_box_offset=Vec2{0, -20}, overlap_box_pivot=.bottom_center},
+	.oblisk = {overlap_box_size=Vec2{40, 60}, overlap_box_offset=Vec2{0, 10}, overlap_box_pivot=.bottom_center},
+	.oblisk_rest = {overlap_box_size=Vec2{40, 60}, overlap_box_offset=Vec2{0, 10}, overlap_box_pivot=.bottom_center},
+	.oblisk_broken = {overlap_box_size=Vec2{12, 12}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 }
 
 Sprite_Data :: struct {
@@ -1191,7 +1191,7 @@ draw_placeable_preview :: proc() {
 		return
 	}
 
-	place_pos := snap_vec2_to_grid(mouse_world, ENTITY_GRID_SIZE)
+	place_pos := snap_vec2_to_grid_center(mouse_world, ENTITY_GRID_SIZE)
 	diff := place_pos - player.pos
 	d2 := diff.x*diff.x + diff.y*diff.y
 	if d2 > PLACE_PREVIEW_RANGE*PLACE_PREVIEW_RANGE {
@@ -1610,11 +1610,6 @@ get_entity_overlap_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #opti
 		return {}, false
 	}
 
-	#partial switch e.kind {
-	case .oblisk_ent:
-		size := get_sprite_size(e.sprite)
-		return shape.rect_make(e.pos + Vec2{0, -4}, Vec2{size.x-6, size.y/2}, pivot=.bottom_center), true
-	}
 
 	data := sprite_data[e.sprite]
 	if data.overlap_box_size.x != 0 || data.overlap_box_size.y != 0 {
@@ -1645,18 +1640,18 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 	case .oblisk_ent:
 		// Obelisk collider is a narrow vertical blocker in the center.
 		size := get_sprite_size(e.sprite)
-		center := e.pos + Vec2{0, -24}
+		center := e.pos + Vec2{0, 0}
 
-		return shape.rect_make(center, Vec2{size.x-2,size.y/3}, pivot=.bottom_center), true
+		return shape.rect_make(center, Vec2{size.x-2,size.y/2}, pivot=.bottom_center), true
 	case .tree_ent:
 		// Tree collider is only the trunk section so players can overlap canopy.
 		size := get_sprite_size(e.sprite)
-		center := e.pos + Vec2{0, -51}
+		center := e.pos + Vec2{0, 0}
 		return shape.rect_make(center, Vec2{50, 30}, pivot=.bottom_center), true
 	case .sapling_ent:
-		return shape.rect_make(e.pos + Vec2{0, -13}, Vec2{18, 13}, pivot=.bottom_center), true
+		return shape.rect_make(e.pos , Vec2{18, 13}, pivot=.bottom_center), true
 	case .sprout_ent:
-		return shape.rect_make(e.pos + Vec2{0, -8}, Vec2{15, 10}, pivot=.bottom_center), true
+		return shape.rect_make(e.pos , Vec2{15, 10}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -2722,7 +2717,7 @@ try_begin_place_equipped_item :: proc(mouse_world: Vec2) -> bool {
 		return false
 	}
 
-	place_pos := snap_vec2_to_grid(mouse_world, ENTITY_GRID_SIZE)
+	place_pos := snap_vec2_to_grid_center(mouse_world, ENTITY_GRID_SIZE)
 	if is_world_position_blocked_for_player(place_pos) {
 		return false
 	}
@@ -3558,7 +3553,7 @@ setup_movement_indicator_fx :: proc(using e: ^Entity) {
 setup_oblisk_ent :: proc(using e: ^Entity) {
 	kind = .oblisk_ent
 	sprite = .oblisk_rest
-	draw_pivot = .center_center
+	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 800)
 	break_drop_item = .oblisk_fragment
@@ -3596,7 +3591,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 setup_tree_ent :: proc(using e: ^Entity) {
 	kind = .tree_ent
 	sprite = .tree
-	draw_pivot = .center_center
+	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 16)
 	break_drop_item = .wood
@@ -3612,7 +3607,7 @@ setup_tree_ent :: proc(using e: ^Entity) {
 setup_sapling_ent :: proc(using e: ^Entity) {
 	kind = .sapling_ent
 	sprite = .sapling
-	draw_pivot = .center_center
+	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 3)
 	break_drop_item = .wood
@@ -3628,7 +3623,7 @@ setup_sapling_ent :: proc(using e: ^Entity) {
 setup_sprout_ent :: proc(using e: ^Entity) {
 	kind = .sprout_ent
 	sprite = .sprout
-	draw_pivot = .center_center
+	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 2)
 	break_drop_item = .fiber
