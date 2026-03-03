@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Boost hit flash effect when durability is below 3
+## [HEAD] Scale durability damage per hit by held item multiplier
+- Added `item_hit_durability_multiplier` and applied it in `entity_apply_hit` so held items now scale how much durability each hit removes.
+- Hit damage now resolves from the player’s equipped item and applies integer durability loss via multiplier-based damage.
+
+## [cfc8421] Boost hit flash effect when durability is below 3
 - Increased white hit-flash intensity and outline thickness for low-durability entities (`durability < 3`).
 - Slowed hit-flash fade-out at low durability so the stronger effect is visible longer.
 - Further increased low-durability flash strength with a higher alpha multiplier, slower decay, and added diagonal outline passes.

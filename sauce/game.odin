@@ -1416,6 +1416,23 @@ item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
 	}
 }
 
+item_hit_durability_multiplier :: proc(item: Item_Kind) -> f32 {
+	switch item {
+	case .nil: return 1.0
+	case .wood: return 1.0
+	case .stone: return 1.0
+	case .fiber: return 1.0
+	case .stick: return 1.0
+	case .rope: return 1.0
+	case .stone_blade: return 1.5
+	case .stone_multitool: return 2.0
+	case .oblisk_fragment: return 1.0
+	case .oblisk_core: return 1.2
+	case .dagger_item: return 1.4
+	case: return 1.0
+	}
+}
+
 start_hit_cooldown_for_item :: proc(item: Item_Kind) {
 	dur := item_hit_cooldown(item)
 	ctx.gs.hit_cooldown_duration = dur
@@ -1424,6 +1441,19 @@ start_hit_cooldown_for_item :: proc(item: Item_Kind) {
 
 is_hit_cooldown_ready :: proc() -> bool {
 	return now() >= ctx.gs.hit_cooldown_end_time
+}
+
+get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
+	mult: f32 = 1.0
+	if is_valid(hitter^) && hitter.kind == .player {
+		item, count := get_equipped_item()
+		if count <= 0 {
+			item = .nil
+		}
+		mult = item_hit_durability_multiplier(item)
+	}
+
+	return max(1, int(math.ceil(mult)))
 }
 
 inventory_add_item :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -> (added: int) {
@@ -2176,7 +2206,8 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	target.hit_flash = Vec4{1, 1, 1, 1}
 	target.last_hit_time = now()
 	target.durability_regen_accum = 0
-	target.durability -= 1
+	damage := get_hit_durability_damage(hitter)
+	target.durability -= damage
 	if target.durability > 0 {
 		return
 	}
