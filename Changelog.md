@@ -1,7 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
-- No unreleased changes yet.
+- Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
 
 ## [aed2934] Add active pause menu overlay with global ESC open/close behavior
 - Added a pause menu overlay (`UI_OVERLAY_PAUSE`) with centered Resume UI.

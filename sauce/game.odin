@@ -1590,7 +1590,7 @@ is_world_pos_in_water_collision :: proc(pos: Vec2) -> bool {
 }
 
 is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
-	step := 1.0
+	step: f32 = 1.0
 	y := rect.y
 	for y <= rect.w {
 		x := rect.x
