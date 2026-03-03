@@ -69,6 +69,7 @@ Game_State :: struct {
 	swing_rotation: f32,
 	swing_dir: Vec2,
 	inventory: Inventory_State,
+	spawned_vegetation_chunks: [dynamic]u64,
 
 	scratch: struct {
 		all_entities: []Entity_Handle,
@@ -97,6 +98,13 @@ LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 PLAYER_MOVE_SPEED: f32 : 112.0
 BIOME_CHUNK_SIZE_TILES :: 64
+VEG_SPAWN_RADIUS_CHUNKS :: 2
+GRASS_SPAWNS_PER_CHUNK :: 11
+GRASS_SPAWN_TRIES_PER_CHUNK :: 28
+TREE_SPAWNS_PER_CHUNK :: 3
+TREE_SPAWN_TRIES_PER_CHUNK :: 16
+VEG_MIN_DIST_GRASS: f32 : 12
+VEG_MIN_DIST_TREE: f32 : 22
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
@@ -250,6 +258,7 @@ Entity_Kind :: enum {
 	tree_ent,
 	sapling_ent,
 	sprout_ent,
+	grass_ent,
 	item_pickup,
 	dagger_projectile,
 	movement_indicator_fx,
@@ -267,6 +276,7 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 		case .tree_ent: setup_tree_ent(e)
 		case .sapling_ent: setup_sapling_ent(e)
 		case .sprout_ent: setup_sprout_ent(e)
+		case .grass_ent: setup_grass_ent(e)
 		case .item_pickup: setup_item_pickup(e)
 		case .dagger_projectile: setup_dagger_projectile(e)
 		case .movement_indicator_fx: setup_movement_indicator_fx(e)
@@ -308,6 +318,7 @@ Sprite_Name :: enum {
 	plains_bg_tile,
 	forest_bg_tile,
 	ruins_bg_tile,
+	grass,
 	dagger_item,
 	dagger_item_flying,
 	movement_indicator,
@@ -352,6 +363,7 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.stone_multitool = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.stone_multitool_swing = {frame_count=4},
 	.movement_indicator = {frame_count=6},
+	.grass = {frame_count=6},
 	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, -6}, overlap_box_pivot=.bottom_center},
 	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, -10}, overlap_box_pivot=.bottom_center},
 	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, -51}, overlap_box_pivot=.bottom_center},
@@ -967,6 +979,7 @@ game_update :: proc() {
 		spawn_item_pickup(.stone_multitool, 1, Vec2{-55, 6})
 		
 	}
+	spawn_vegetation_near_player_chunks()
 
 	if is_game_paused() {
 		return
@@ -1239,6 +1252,136 @@ biome_fallback_col :: proc(biome: Biome_Kind) -> Vec4 {
 		return Vec4{0.38, 0.39, 0.42, 1.0}
 	}
 	return Vec4{0.4, 0.4, 0.4, 1.0}
+}
+
+make_chunk_key :: proc(chunk_x: int, chunk_y: int) -> u64 {
+	ux := u64(u32(chunk_x))
+	uy := u64(u32(chunk_y))
+	return (ux << 32) | uy
+}
+
+is_vegetation_chunk_spawned :: proc(chunk_x: int, chunk_y: int) -> bool {
+	key := make_chunk_key(chunk_x, chunk_y)
+	for k in ctx.gs.spawned_vegetation_chunks {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
+mark_vegetation_chunk_spawned :: proc(chunk_x: int, chunk_y: int) {
+	append(&ctx.gs.spawned_vegetation_chunks, make_chunk_key(chunk_x, chunk_y))
+}
+
+can_spawn_entity_now :: proc() -> bool {
+	return len(ctx.gs.entity_free_list) > 0 || ctx.gs.entity_top_count+1 < MAX_ENTITIES
+}
+
+is_spawn_position_clear :: proc(pos: Vec2, min_dist: f32) -> bool {
+	min_dist_sq := min_dist * min_dist
+	for &e in ctx.gs.entities {
+		if !is_valid(e) do continue
+		diff := e.pos - pos
+		if diff.x*diff.x+diff.y*diff.y < min_dist_sq {
+			return false
+		}
+	}
+	return true
+}
+
+try_spawn_world_entity :: proc(kind: Entity_Kind, pos: Vec2, min_dist: f32) -> bool {
+	if !can_spawn_entity_now() {
+		return false
+	}
+	if !is_spawn_position_clear(pos, min_dist) {
+		return false
+	}
+
+	e := entity_create(kind)
+	e.pos = pos
+	return true
+}
+
+spawn_grass_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
+	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+
+	spawned := 0
+	for i in 0..<GRASS_SPAWN_TRIES_PER_CHUNK {
+		if spawned >= GRASS_SPAWNS_PER_CHUNK do break
+
+		base_seed := u64(i64(chunk_x)*73856093 + i64(chunk_y)*19349663 + i64(i)*83492791)
+		rx := random01_from_seed(base_seed ~ 0x27D4EB2D)
+		ry := random01_from_seed(base_seed ~ 0x85EBCA77)
+		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
+
+		if try_spawn_world_entity(.grass_ent, pos, VEG_MIN_DIST_GRASS) {
+			spawned += 1
+		}
+	}
+}
+
+spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2, biome: Biome_Kind) {
+	if biome != .plains && biome != .forest {
+		return
+	}
+
+	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+
+	spawned := 0
+	for i in 0..<TREE_SPAWN_TRIES_PER_CHUNK {
+		if spawned >= TREE_SPAWNS_PER_CHUNK do break
+
+		base_seed := u64(i64(chunk_x)*116129781 + i64(chunk_y)*961748927 + i64(i)*31337)
+		rx := random01_from_seed(base_seed ~ 0x9E3779B9)
+		ry := random01_from_seed(base_seed ~ 0x7F4A7C15)
+		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
+		pos = snap_vec2_to_grid(pos, ENTITY_GRID_SIZE)
+
+		if try_spawn_world_entity(.tree_ent, pos, VEG_MIN_DIST_TREE) {
+			spawned += 1
+		}
+	}
+}
+
+spawn_vegetation_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
+	if is_vegetation_chunk_spawned(chunk_x, chunk_y) {
+		return
+	}
+	mark_vegetation_chunk_spawned(chunk_x, chunk_y)
+
+	biome := get_biome_for_chunk(chunk_x, chunk_y)
+	spawn_grass_for_chunk(chunk_x, chunk_y, tile_size)
+	spawn_trees_for_chunk(chunk_x, chunk_y, tile_size, biome)
+}
+
+spawn_vegetation_near_player_chunks :: proc() {
+	player := get_player()
+	if !is_valid(player^) {
+		return
+	}
+
+	tile_size := get_sprite_size(.bg_repeat_tex0)
+	if tile_size.x <= 0 || tile_size.y <= 0 {
+		tile_size = Vec2{16, 16}
+	}
+
+	player_tile_x := int(math.floor(player.pos.x / tile_size.x))
+	player_tile_y := int(math.floor(player.pos.y / tile_size.y))
+	player_chunk_x := floor_div_int(player_tile_x, BIOME_CHUNK_SIZE_TILES)
+	player_chunk_y := floor_div_int(player_tile_y, BIOME_CHUNK_SIZE_TILES)
+
+	cy := player_chunk_y - VEG_SPAWN_RADIUS_CHUNKS
+	for cy <= player_chunk_y+VEG_SPAWN_RADIUS_CHUNKS {
+		cx := player_chunk_x - VEG_SPAWN_RADIUS_CHUNKS
+		for cx <= player_chunk_x+VEG_SPAWN_RADIUS_CHUNKS {
+			spawn_vegetation_chunk(cx, cy, tile_size)
+			cx += 1
+		}
+		cy += 1
+	}
 }
 
 draw_placeable_range_circle :: proc() {
@@ -1588,7 +1731,7 @@ rounded_hitbox_contains_point :: proc(rect: shape.Rect, p: Vec2, corner_cut: f32
 
 should_grid_snap_entity :: proc(e: Entity) -> bool {
 	#partial switch e.kind {
-	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx:
+	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx, .grass_ent:
 		return false
 	case:
 		return true
@@ -2746,7 +2889,7 @@ find_hittable_entity_at_world_pos :: proc(mouse_world: Vec2) -> (^Entity, bool) 
 	}
 
 	#partial switch target.kind {
-	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx:
+	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx, .grass_ent:
 		return nil, false
 	}
 
@@ -2863,6 +3006,7 @@ find_entity_at_world_pos :: proc(pos: Vec2) -> (^Entity, bool) {
 		if e.kind == .player do continue
 		if e.kind == .movement_indicator_fx do continue
 		if e.kind == .dagger_projectile do continue
+		if e.kind == .grass_ent do continue
 
 		rect, ok := get_entity_hitbox_rect(e^)
 		if !ok {
@@ -3474,6 +3618,31 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	break_drop_item = .fiber
 	break_drop_count = 1
 	on_hit_proc = entity_on_hit_noop
+
+	e.update_proc = proc(_: ^Entity) {}
+	e.draw_proc = proc(e: Entity) {
+		draw_entity_default(e)
+	}
+}
+
+setup_grass_ent :: proc(using e: ^Entity) {
+	kind = .grass_ent
+	sprite = .grass
+	draw_pivot = .center_center
+	blocks_player = false
+	set_entity_durability(e, 0)
+	break_drop_item = .nil
+	break_drop_count = 0
+	on_hit_proc = entity_on_hit_noop
+	loop = true
+	frame_duration = 0.12
+
+	frame_count := get_frame_count(sprite)
+	if frame_count > 1 {
+		anim_index = e.handle.id % frame_count
+	} else {
+		anim_index = 0
+	}
 
 	e.update_proc = proc(_: ^Entity) {}
 	e.draw_proc = proc(e: Entity) {
