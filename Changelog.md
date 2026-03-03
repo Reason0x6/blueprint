@@ -4,6 +4,7 @@
 - Entity-hit swings now face only left/right based on whether the hit target is on the left or right of the player (no arbitrary angle direction).
 - Empty-space click swings continue to use the player's current facing direction.
 - Swing visuals remain offset away from the character face.
+- Fixed click-flow override where a fallback facing swing could replace target-side hit swing orientation in the same click.
 
 ## [36c1c8b] Map stone multitool swings to stone_multitool_swing animation
 - Added `stone_multitool_swing` to `Sprite_Name`/`sprite_data` and mapped `item_swing_sprite(.stone_multitool)` to that sprite.

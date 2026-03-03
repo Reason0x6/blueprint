@@ -951,8 +951,9 @@ game_update :: proc() {
 			if did_hit {
 				ctx.gs.has_hold_hit_target = true
 				ctx.gs.hold_hit_target = hit_handle
+			} else {
+				start_player_swing_fx()
 			}
-			start_player_swing_fx()
 			item, _ := get_equipped_item()
 			start_hit_cooldown_for_item(item)
 			sound_play("event:/schloop", pos=pos)
