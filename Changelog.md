@@ -10,6 +10,8 @@
 - Hitbox debug rendering (entity, water, terrain-block outlines) now draws on the pause-menu layer while paused, so toggling hitboxes in the pause menu shows them immediately above the gray overlay.
 - Water debug hitboxes now visualize the actual per-pixel `water.png` collision mask (with oversize margin) instead of a full-tile blue outline, so structure-water debug matches real collision shape.
 - Grid debug is now OFF by default at startup (still toggleable from the pause menu).
+- Fixed hitbox-toggle crashes by replacing per-pixel-per-tile water debug fills with lightweight per-tile mask-bounds debug rectangles.
+- Fixed water collision mask dimension loading to use the actual decoded `water.png` width/height (removed erroneous `+14` sizing), keeping collision sampling and debug bounds in sync.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

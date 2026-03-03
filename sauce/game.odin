@@ -979,8 +979,8 @@ load_water_collision_mask :: proc() {
 		append(&alpha, a)
 	}
 
-	water_collision_mask.width = int(width+14)
-	water_collision_mask.height = int(height+14)
+	water_collision_mask.width = int(width)
+	water_collision_mask.height = int(height)
 	water_collision_mask.alpha = alpha
 }
 
@@ -1745,46 +1745,26 @@ draw_water_collision_debug :: proc() {
 	max_tile_x := int(math.ceil((center.x + half_w) / tile_size.x))
 	min_tile_y := int(math.floor((center.y - half_h) / tile_size.y))
 	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
-
-	draw_water_collision_mask_for_tile :: proc(tile_x: int, tile_y: int, layer: ZLayer) {
-		tile := terrain_tile_for_tile(tile_x, tile_y)
-		if tile.kind != .water {
-			return
-		}
-
-		tile_min_x := f32(tile_x) * ENTITY_GRID_SIZE
-		tile_min_y := f32(tile_y) * ENTITY_GRID_SIZE
-		oversize := max(0.0, WATER_COLLISION_OVERSIZE_PX)
-
-		// Fallback: if mask is unavailable, draw full-tile blocked area.
-		if water_collision_mask.width <= 0 || water_collision_mask.height <= 0 || len(water_collision_mask.alpha) == 0 {
-			tile_rect := shape.Rect{
-				tile_min_x - oversize,
-				tile_min_y - oversize,
-				tile_min_x + ENTITY_GRID_SIZE + oversize,
-				tile_min_y + ENTITY_GRID_SIZE + oversize,
-			}
-			draw_rect(tile_rect, col=Vec4{0.2, 0.75, 1.0, 0.12}, outline_col=Vec4{0.2, 0.75, 1.0, 0.82}, z_layer=layer)
-			return
-		}
-
-		cell_w := ENTITY_GRID_SIZE / f32(water_collision_mask.width)
-		cell_h := ENTITY_GRID_SIZE / f32(water_collision_mask.height)
-
-		for py in 0..<water_collision_mask.height {
-			for px in 0..<water_collision_mask.width {
-				idx := py*water_collision_mask.width + px
-				if idx < 0 || idx >= len(water_collision_mask.alpha) do continue
+	mask_w := water_collision_mask.width
+	mask_h := water_collision_mask.height
+	has_mask := mask_w > 0 && mask_h > 0 && len(water_collision_mask.alpha) >= mask_w*mask_h
+	opaque_min_x := mask_w
+	opaque_min_y := mask_h
+	opaque_max_x := -1
+	opaque_max_y := -1
+	if has_mask {
+		for py in 0..<mask_h {
+			for px in 0..<mask_w {
+				idx := py*mask_w + px
 				if water_collision_mask.alpha[idx] == 0 do continue
-
-				pixel_rect := shape.Rect{
-					tile_min_x + f32(px)*cell_w - oversize,
-					tile_min_y + f32(py)*cell_h - oversize,
-					tile_min_x + f32(px+1)*cell_w + oversize,
-					tile_min_y + f32(py+1)*cell_h + oversize,
-				}
-				draw_rect(pixel_rect, col=Vec4{0.2, 0.75, 1.0, 0.18}, z_layer=layer)
+				if px < opaque_min_x do opaque_min_x = px
+				if py < opaque_min_y do opaque_min_y = py
+				if px > opaque_max_x do opaque_max_x = px
+				if py > opaque_max_y do opaque_max_y = py
 			}
+		}
+		if opaque_max_x < opaque_min_x || opaque_max_y < opaque_min_y {
+			has_mask = false
 		}
 	}
 
@@ -1796,7 +1776,38 @@ draw_water_collision_debug :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			draw_water_collision_mask_for_tile(tx, ty, layer)
+			tile := terrain_tile_for_tile(tx, ty)
+			if tile.kind != .water {
+				tx += 1
+				continue
+			}
+
+			tile_min_x := f32(tx) * ENTITY_GRID_SIZE
+			tile_min_y := f32(ty) * ENTITY_GRID_SIZE
+			oversize := max(0.0, WATER_COLLISION_OVERSIZE_PX)
+
+			debug_rect: shape.Rect
+			if has_mask {
+				u0 := f32(opaque_min_x) / f32(mask_w)
+				v0 := f32(opaque_min_y) / f32(mask_h)
+				u1 := f32(opaque_max_x+1) / f32(mask_w)
+				v1 := f32(opaque_max_y+1) / f32(mask_h)
+				debug_rect = shape.Rect{
+					tile_min_x + u0*ENTITY_GRID_SIZE - oversize,
+					tile_min_y + v0*ENTITY_GRID_SIZE - oversize,
+					tile_min_x + u1*ENTITY_GRID_SIZE + oversize,
+					tile_min_y + v1*ENTITY_GRID_SIZE + oversize,
+				}
+			} else {
+				debug_rect = shape.Rect{
+					tile_min_x - oversize,
+					tile_min_y - oversize,
+					tile_min_x + ENTITY_GRID_SIZE + oversize,
+					tile_min_y + ENTITY_GRID_SIZE + oversize,
+				}
+			}
+
+			draw_rect(debug_rect, col=Vec4{0.2, 0.75, 1.0, 0.12}, outline_col=Vec4{0.2, 0.75, 1.0, 0.82}, z_layer=layer)
 			tx += 1
 		}
 		ty += 1
