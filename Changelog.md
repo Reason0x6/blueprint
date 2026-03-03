@@ -29,6 +29,7 @@
 - Default terrain generation currently fills with block `11` (flat ground), as requested, while keeping the block-selector path ready for later edge/water block mapping.
 - Updated terrain block selection to step through `1 -> 2 -> ... -> 54` in-order across tiles (wrapping) for block-map validation.
 - Added centered per-tile block index labels so each rendered tile shows the block number currently used.
+- Corrected tileset block row indexing so block `1` maps to the top-left block of the `9x6` tilemap layout.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.

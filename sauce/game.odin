@@ -1222,6 +1222,7 @@ sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
 
 TERRAIN_TILESET_BLOCK_PX :: 64
 TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
+TERRAIN_TILESET_BLOCK_ROWS :: 6
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
 
@@ -1258,6 +1259,7 @@ draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, 
 	cell := block_index - 1
 	cell_x := cell % TERRAIN_TILESET_BLOCKS_PER_ROW
 	cell_y := cell / TERRAIN_TILESET_BLOCKS_PER_ROW
+	cell_y = (TERRAIN_TILESET_BLOCK_ROWS - 1) - cell_y
 
 	base_uv := atlas_uv_from_sprite(sprite)
 	uv_w := base_uv.z - base_uv.x
