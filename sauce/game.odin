@@ -1452,7 +1452,9 @@ draw_world_terrain_tiles :: proc() {
 			if sprite_is_loaded(.tilemap_color1) {
 				draw_tileset_block_in_world_rect(.tilemap_color1, block_index, tile_rect, col=Vec4{1, 1, 1, 0.95})
 			}
-			draw_text(tile_center, fmt.tprintf("%v", block_index), pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
+			if ctx.gs.debug_show_grid {
+				draw_text(tile_center, fmt.tprintf("%v", block_index), pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
+			}
 			tx += 1
 		}
 		ty += 1
@@ -1683,6 +1685,11 @@ snap_vec2_to_grid :: proc(v: Vec2, grid: f32) -> Vec2 {
 	return Vec2{snap_to_grid(v.x, grid), snap_to_grid(v.y, grid)}
 }
 
+snap_vec2_to_grid_center :: proc(v: Vec2, grid: f32) -> Vec2 {
+	if grid <= 0 do return v
+	return snap_vec2_to_grid(v, grid) + Vec2{grid * 0.5, grid * 0.5}
+}
+
 rounded_hitbox_sub_rects :: proc(rect: shape.Rect, corner_cut: f32) -> ([2]shape.Rect, bool) {
 	size := shape.rect_size(rect)
 	cut := corner_cut
@@ -1750,7 +1757,7 @@ apply_entity_grid_snap :: proc() {
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
 		if !should_grid_snap_entity(e^) do continue
-		e.pos = snap_vec2_to_grid(e.pos, ENTITY_GRID_SIZE)
+		e.pos = snap_vec2_to_grid_center(e.pos, ENTITY_GRID_SIZE)
 	}
 }
 
