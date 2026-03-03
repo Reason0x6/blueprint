@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Use target-side left/right swing facing on hits and facing-based swings on empty clicks
+## [HEAD] Scale tree wood drop chance by held-item durability multiplier
+- Updated tree `on_hit` drop logic to multiply `TREE_WOOD_HIT_DROP_CHANCE` by the hitter's `item_hit_durability_multiplier`.
+- Tree wood drop chance now scales with equipped item effectiveness (including zero-chance items).
+
+## [049606f] Use target-side left/right swing facing on hits and facing-based swings on empty clicks
 - Entity-hit swings now face only left/right based on whether the hit target is on the left or right of the player (no arbitrary angle direction).
 - Empty-space click swings continue to use the player's current facing direction.
 - Swing visuals remain offset away from the character face.

@@ -1464,7 +1464,7 @@ is_hit_cooldown_ready :: proc() -> bool {
 	return now() >= ctx.gs.hit_cooldown_end_time
 }
 
-get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
+get_hit_item_multiplier :: proc(hitter: ^Entity) -> f32 {
 	mult: f32 = 1.0
 	if is_valid(hitter^) && hitter.kind == .player {
 		item, count := get_equipped_item()
@@ -1473,7 +1473,11 @@ get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
 		}
 		mult = item_hit_durability_multiplier(item)
 	}
+	return mult
+}
 
+get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
+	mult := get_hit_item_multiplier(hitter)
 	return max(0, int(math.ceil(mult)))
 }
 
@@ -2228,8 +2232,9 @@ roll_chance :: proc(chance: f32, salt: u64) -> bool {
 
 entity_on_hit_noop :: proc(_: ^Entity, _: ^Entity) {}
 
-entity_on_hit_tree :: proc(target: ^Entity, _: ^Entity) {
-	if roll_chance(TREE_WOOD_HIT_DROP_CHANCE, u64(target.handle.id)) {
+entity_on_hit_tree :: proc(target: ^Entity, hitter: ^Entity) {
+	chance := TREE_WOOD_HIT_DROP_CHANCE * get_hit_item_multiplier(hitter)
+	if roll_chance(chance, u64(target.handle.id)) {
 		spawn_item_pickup_towards_player(.wood, 1, compute_hit_drop_spawn_pos(target))
 	}
 }
