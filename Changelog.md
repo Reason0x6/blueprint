@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Drag-out inventory drop to world
+## [HEAD] Drop inventory throws just outside auto-pickup radius
+- Changed drag-out inventory drops to spawn just outside the player's auto-pickup area instead of exactly at mouse world position.
+- Added shared pickup/drop radius constants and aligned auto-pickup range checks to use them.
+- Uses mouse direction from the player to choose the drop side, with facing-direction fallback when cursor direction is degenerate.
+
+## [a2f99c1] Drag-out inventory drop to world
 - Added world-space mouse position conversion so UI drag/drop can spawn entities in world coordinates.
 - When a dragged inventory stack is released outside valid inventory/hotbar slots, it now spawns an item pickup in the world at the cursor position.
 - Preserved existing slot drop behavior (swap/stack/move) when released over valid slots.

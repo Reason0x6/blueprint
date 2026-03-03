@@ -66,6 +66,8 @@ Game_State :: struct {
 INVENTORY_SLOT_COUNT :: 12
 HOTBAR_SLOT_COUNT :: 6
 HOTBAR_SLOT_START :: INVENTORY_SLOT_COUNT - HOTBAR_SLOT_COUNT
+AUTO_PICKUP_RADIUS: f32 : 40
+DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
 
 Item_Kind :: enum u8 {
 	nil,
@@ -1006,7 +1008,7 @@ inventory_update :: proc() {
 	}
 
 	// Auto-pickup nearby items.
-	pickup_range_sq :f32= 40.0 * 40.0
+	pickup_range_sq := AUTO_PICKUP_RADIUS * AUTO_PICKUP_RADIUS
 	picked_any := false
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
@@ -1060,6 +1062,23 @@ draw_inventory_slot :: proc(rect: shape.Rect, slot: Inventory_Slot, selected: bo
 		count_text := fmt.tprintf("%v", slot.count)
 		draw_text(rect.zw + Vec2{-2, -1}, count_text, pivot=.top_right, z_layer=.ui, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.6})
 	}
+}
+
+get_inventory_drop_world_pos :: proc(mouse_world_pos: Vec2) -> Vec2 {
+	player := get_player()
+	if !is_valid(player^) {
+		return mouse_world_pos
+	}
+
+	dir := mouse_world_pos - player.pos
+	len_sq := dir.x*dir.x + dir.y*dir.y
+	if len_sq <= 0.0001 {
+		dir = Vec2{player.flip_x ? -1 : 1, 0}
+	} else {
+		dir /= math.sqrt(len_sq)
+	}
+
+	return player.pos + dir * DROP_OUTSIDE_PICKUP_RADIUS
 }
 
 hotbar_slot_rect :: proc(i: int) -> shape.Rect {
@@ -1189,7 +1208,7 @@ draw_inventory_ui :: proc() {
 			drop_dragged_slot(inv, slot_index, slot_ok)
 		} else {
 			if inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
-				drop_pos := mouse_pos_in_world_space()
+				drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
 				spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
 			}
 			clear_inventory_drag(inv)
