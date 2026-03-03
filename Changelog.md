@@ -38,6 +38,7 @@
 - Locked placeable preview to `pending_place_pos` while the player is auto-moving to place, preventing camera/mouse world-space drift from making the target appear to move.
 - Switched center-grid snapping to floor-cell center mapping (`floor(v/grid)*grid + half`) to eliminate consistent one-tile vertical offset during placement.
 - Tree destruction now always spawns a `sprout_ent` in addition to existing wood break drops, guaranteeing wood + sprout outcome on tree break.
+- Refactored entity break drops from single `break_drop_item/count` fields to a multi-drop list (`break_drops + break_drop_len`) so an entity can define more than one guaranteed item drop on break.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.

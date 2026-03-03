@@ -191,6 +191,12 @@ Input_Action :: enum u8 {
 //
 // entity system
 
+MAX_BREAK_DROPS :: 4
+Break_Drop :: struct {
+	item: Item_Kind,
+	count: int,
+}
+
 Entity :: struct {
 	handle: Entity_Handle,
 	kind: Entity_Kind,
@@ -218,8 +224,8 @@ Entity :: struct {
 	durability_max: int,
 	durability_regen_accum: f32,
 	last_hit_time: f64,
-	break_drop_item: Item_Kind,
-	break_drop_count: int,
+	break_drops: [MAX_BREAK_DROPS]Break_Drop,
+	break_drop_len: int,
 	blocks_player: bool,
 	on_hit_proc: proc(^Entity, ^Entity),
 	pickup_item: Item_Kind,
@@ -2895,8 +2901,10 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		return
 	}
 
-	if target.break_drop_item != .nil && target.break_drop_count > 0 {
-		spawn_item_pickup_towards_player(target.break_drop_item, target.break_drop_count, compute_hit_drop_spawn_pos(target))
+	for i in 0..<target.break_drop_len {
+		drop := target.break_drops[i]
+		if drop.item == .nil || drop.count <= 0 do continue
+		spawn_item_pickup_towards_player(drop.item, drop.count, compute_hit_drop_spawn_pos(target))
 	}
 	if target.kind == .tree_ent {
 		// Tree breaks should always leave a sprout in the world.
@@ -3336,11 +3344,28 @@ set_entity_durability :: proc(e: ^Entity, value: int) {
 	e.last_hit_time = now()
 }
 
+clear_entity_break_drops :: proc(e: ^Entity) {
+	e.break_drop_len = 0
+	for i in 0..<MAX_BREAK_DROPS {
+		e.break_drops[i] = {}
+	}
+}
+
+add_entity_break_drop :: proc(e: ^Entity, item: Item_Kind, count: int) {
+	if item == .nil || count <= 0 {
+		return
+	}
+	if e.break_drop_len >= MAX_BREAK_DROPS {
+		return
+	}
+	e.break_drops[e.break_drop_len] = Break_Drop{item=item, count=count}
+	e.break_drop_len += 1
+}
+
 setup_player :: proc(e: ^Entity) {
 	e.kind = .player
 	set_entity_durability(e, 0)
-	e.break_drop_item = .nil
-	e.break_drop_count = 0
+	clear_entity_break_drops(e)
 	e.on_hit_proc = entity_on_hit_noop
 
 	// this offset is to take it from the bottom center of the aseprite document
@@ -3451,8 +3476,7 @@ setup_item_pickup :: proc(using e: ^Entity) {
 	draw_pivot = .center_center
 	blocks_player = false
 	set_entity_durability(e, 0)
-	break_drop_item = .nil
-	break_drop_count = 0
+	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(e: ^Entity) {
@@ -3488,8 +3512,7 @@ setup_dagger_projectile :: proc(using e: ^Entity) {
 	draw_pivot = .center_center
 	blocks_player = false
 	set_entity_durability(e, 0)
-	break_drop_item = .nil
-	break_drop_count = 0
+	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
 	max_distance = 500
 	loop = false
@@ -3548,8 +3571,7 @@ setup_movement_indicator_fx :: proc(using e: ^Entity) {
 	draw_offset = {}
 	blocks_player = false
 	set_entity_durability(e, 0)
-	break_drop_item = .nil
-	break_drop_count = 0
+	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
 	loop = false
 	frame_duration = 0.05
@@ -3575,8 +3597,8 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 800)
-	break_drop_item = .oblisk_fragment
-	break_drop_count = 1
+	clear_entity_break_drops(e)
+	add_entity_break_drop(e, .oblisk_fragment, 1)
 	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(e: ^Entity) {
@@ -3613,8 +3635,8 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 16)
-	break_drop_item = .wood
-	break_drop_count = 2
+	clear_entity_break_drops(e)
+	add_entity_break_drop(e, .wood, 2)
 	on_hit_proc = entity_on_hit_tree
 
 	e.update_proc = proc(_: ^Entity) {}
@@ -3629,8 +3651,8 @@ setup_sapling_ent :: proc(using e: ^Entity) {
 	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 3)
-	break_drop_item = .wood
-	break_drop_count = 1
+	clear_entity_break_drops(e)
+	add_entity_break_drop(e, .wood, 1)
 	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(_: ^Entity) {}
@@ -3645,8 +3667,8 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	draw_pivot = .bottom_center
 	blocks_player = true
 	set_entity_durability(e, 2)
-	break_drop_item = .fiber
-	break_drop_count = 1
+	clear_entity_break_drops(e)
+	add_entity_break_drop(e, .fiber, 1)
 	on_hit_proc = entity_on_hit_noop
 
 	e.update_proc = proc(_: ^Entity) {}
@@ -3661,8 +3683,7 @@ setup_grass_ent :: proc(using e: ^Entity) {
 	draw_pivot = .center_center
 	blocks_player = false
 	set_entity_durability(e, 0)
-	break_drop_item = .nil
-	break_drop_count = 0
+	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
 	loop = true
 	frame_duration = 0.12
