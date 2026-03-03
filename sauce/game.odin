@@ -258,9 +258,9 @@ Sprite_Name :: enum {
 	player_death,
 	player_run,
 	player_idle,
-	wood_item,
-	sticks_item,
-	fibre_item,
+	wood,
+	sticks,
+	fibre,
 	sapling,
 	sprout,
 	tree,
@@ -282,9 +282,9 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.player_death = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.dagger_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.dagger_item_flying = {frame_count=7},
-	.wood_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
-	.sticks_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
-	.fibre_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.wood = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.sticks = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.fibre = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.movement_indicator = {frame_count=6},
 	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, -6}, overlap_box_pivot=.bottom_center},
 	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, -10}, overlap_box_pivot=.bottom_center},
@@ -1238,10 +1238,10 @@ item_name :: proc(item: Item_Kind) -> string {
 item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	switch item {
 	case .nil: return .nil
-	case .wood: return .wood_item
+	case .wood: return .wood
 	case .stone: return .oblisk_rest
-	case .fiber: return .fibre_item
-	case .stick: return .sticks_item
+	case .fiber: return .fibre
+	case .stick: return .sticks
 	case .rope: return .player_idle
 	case .stone_blade: return .dagger_item
 	case .oblisk_fragment: return .oblisk_broken

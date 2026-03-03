@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Add sapling/sprout world entities and item-only resource textures
+## [HEAD] Fix startup crash by matching item sprite names to texture filenames
+- Renamed item sprite enum entries from `wood_item`/`sticks_item`/`fibre_item` to `wood`/`sticks`/`fibre` so atlas loading matches `res/images/wood.png`, `sticks.png`, and `fibre.png`.
+- Updated `sprite_data` and `item_icon_sprite` mappings to the renamed sprite ids, removing the missing-file assert on startup.
+
+## [eefeaed] Add sapling/sprout world entities and item-only resource textures
 - Added `sapling_ent` and `sprout_ent` setups with startup world spawns so both can be placed/tested as standalone entities.
 - Added explicit hitbox definitions for sapling and sprout entity kinds, with saplings blocking player movement and sprouts remaining non-blocking.
 - Updated resource item icon mapping so `wood`, `stick`, and `fiber` now use `wood_item`, `sticks_item`, and `fibre_item` textures instead of placeholder sprites.
