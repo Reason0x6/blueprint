@@ -61,6 +61,7 @@ Game_State :: struct {
 	hit_cooldown_end_time: f64,
 	hit_cooldown_duration: f64,
 	bg_use_forest_grass: bool,
+	ui_overlay_mask: u32,
 	swing_active: bool,
 	swing_sprite: Sprite_Name,
 	swing_anim_index: int,
@@ -79,7 +80,7 @@ HOTBAR_SLOT_COUNT :: 6
 HOTBAR_SLOT_START :: INVENTORY_SLOT_COUNT - HOTBAR_SLOT_COUNT
 AUTO_PICKUP_RADIUS: f32 : 40
 DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
-ENTITY_GRID_SIZE: f32 : 4
+ENTITY_GRID_SIZE: f32 : 32
 HITBOX_CORNER_CUT: f32 : 3
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 DURABILITY_REGEN_DELAY_SEC: f64 : 0.5
@@ -93,6 +94,8 @@ LOW_DURABILITY_FLASH_THRESHOLD :: 3
 LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 
+UI_OVERLAY_INVENTORY : u32 : 1 << 0
+
 Item_Kind :: enum u8 {
 	nil,
 	wood,
@@ -100,6 +103,7 @@ Item_Kind :: enum u8 {
 	fiber,
 	stick,
 	rope,
+	sapling,
 	stone_blade,
 	stone_multitool,
 	oblisk_fragment,
@@ -567,6 +571,7 @@ item_kind_from_token :: proc(tok: string) -> (item: Item_Kind, ok: bool) #option
 	case "fiber": return .fiber, true
 	case "stick": return .stick, true
 	case "rope": return .rope, true
+	case "sapling": return .sapling, true
 	case "stone_blade": return .stone_blade, true
 	case "stone_multitool": return .stone_multitool, true
 	case "oblisk_fragment": return .oblisk_fragment, true
@@ -920,7 +925,7 @@ game_update :: proc() {
 	inventory_update()
 	try_throw_equipped_dagger()
 
-	if key_pressed(.RIGHT_MOUSE) {
+	if key_pressed(.RIGHT_MOUSE) && !is_any_ui_overlay_open() {
 		consume_key_pressed(.RIGHT_MOUSE)
 
 		player := get_player()
@@ -942,25 +947,30 @@ game_update :: proc() {
  		}
 	}
 
-	if key_pressed(.LEFT_MOUSE) && !ctx.gs.inventory.open {
+	if key_pressed(.LEFT_MOUSE) && !is_any_ui_overlay_open() {
 		pos := mouse_pos_in_current_space()
 		begin_hold_hit_target_from_mouse(pos)
 
 		if is_hit_cooldown_ready() {
-			did_hit, hit_handle := try_hit_entity_at_mouse(pos)
-			if did_hit {
-				ctx.gs.has_hold_hit_target = true
-				ctx.gs.hold_hit_target = hit_handle
+			equipped_item, _ := get_equipped_item()
+			placed_sapling := try_place_equipped_sapling(pos)
+			if !placed_sapling {
+				did_hit, hit_handle := try_hit_entity_at_mouse(pos)
+				if did_hit {
+					ctx.gs.has_hold_hit_target = true
+					ctx.gs.hold_hit_target = hit_handle
+				} else {
+					start_player_swing_fx()
+				}
 			} else {
-				start_player_swing_fx()
+				clear_hold_hit_target()
 			}
-			item, _ := get_equipped_item()
-			start_hit_cooldown_for_item(item)
+			start_hit_cooldown_for_item(equipped_item)
 			sound_play("event:/schloop", pos=pos)
 		}
 
 		consume_key_pressed(.LEFT_MOUSE)
-	} else if key_pressed(.LEFT_MOUSE) && ctx.gs.inventory.open {
+	} else if key_pressed(.LEFT_MOUSE) && is_any_ui_overlay_open() {
 		clear_hold_hit_target()
 	}
 	if key_released(.LEFT_MOUSE) {
@@ -1006,6 +1016,7 @@ game_draw :: proc() {
 	// world
 	{
 		push_coord_space(get_world_space())
+		draw_world_grid()
 
 		draw_order := make([dynamic]Entity_Handle, 0, len(get_all_ents()), allocator=context.temp_allocator)
 		for handle in get_all_ents() {
@@ -1056,6 +1067,36 @@ game_draw :: proc() {
 		}
 
 		draw_player_hit_cooldown_bar()
+	}
+}
+
+draw_world_grid :: proc() {
+	grid := ENTITY_GRID_SIZE
+	if grid <= 0 {
+		return
+	}
+
+	center := ctx.gs.cam_pos
+	half_w := f32(GAME_RES_WIDTH)*0.5 + grid
+	half_h := f32(GAME_RES_HEIGHT)*0.5 + grid
+
+	min_x := snap_to_grid(center.x-half_w, grid)
+	max_x := snap_to_grid(center.x+half_w, grid)
+	min_y := snap_to_grid(center.y-half_h, grid)
+	max_y := snap_to_grid(center.y+half_h, grid)
+
+	x := min_x
+	for x <= max_x {
+		line := shape.rect_make(Vec2{x, (min_y + max_y) * 0.5}, Vec2{1, max_y-min_y+grid}, pivot=.center_center)
+		draw_rect(line, col=Vec4{1, 1, 1, 0.08}, z_layer=.shadow)
+		x += grid
+	}
+
+	y := min_y
+	for y <= max_y {
+		line := shape.rect_make(Vec2{(min_x + max_x) * 0.5, y}, Vec2{max_x-min_x+grid, 1}, pivot=.center_center)
+		draw_rect(line, col=Vec4{1, 1, 1, 0.08}, z_layer=.shadow)
+		y += grid
 	}
 }
 
@@ -1374,6 +1415,7 @@ item_name :: proc(item: Item_Kind) -> string {
 	case .fiber: return "Fiber"
 	case .stick: return "Stick"
 	case .rope: return "Rope"
+	case .sapling: return "Sapling"
 	case .stone_blade: return "Stone Blade"
 	case .stone_multitool: return "Stone Multitool"
 	case .oblisk_fragment: return "Fragment"
@@ -1391,6 +1433,7 @@ item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	case .fiber: return .fibre
 	case .stick: return .sticks
 	case .rope: return .rope
+	case .sapling: return .sapling
 	case .stone_blade: return .stone_blade
 	case .stone_multitool: return .stone_multitool
 	case .oblisk_fragment: return .oblisk_broken
@@ -1408,6 +1451,7 @@ item_max_stack :: proc(item: Item_Kind) -> int {
 	case .fiber: return 99
 	case .stick: return 99
 	case .rope: return 99
+	case .sapling: return 99
 	case .stone_blade: return 99
 	case .stone_multitool: return 1
 	case .oblisk_fragment: return 99
@@ -1425,6 +1469,7 @@ item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
 	case .fiber: return 0.5
 	case .stick: return 0.45
 	case .rope: return 0.5
+	case .sapling: return 0.55
 	case .stone_blade: return 0.35
 	case .stone_multitool: return 0.4
 	case .oblisk_fragment: return 0.5
@@ -1620,6 +1665,27 @@ get_total_non_empty_count_in_slots :: proc(slots: []Inventory_Slot) -> int {
 	return total
 }
 
+is_ui_overlay_open :: proc(mask: u32) -> bool {
+	return (ctx.gs.ui_overlay_mask & mask) != 0
+}
+
+is_any_ui_overlay_open :: proc() -> bool {
+	return ctx.gs.ui_overlay_mask != 0
+}
+
+set_ui_overlay_open :: proc(mask: u32, open: bool) {
+	if open {
+		ctx.gs.ui_overlay_mask |= mask
+	} else {
+		ctx.gs.ui_overlay_mask &= ~mask
+	}
+}
+
+close_all_ui_overlays :: proc() {
+	ctx.gs.ui_overlay_mask = 0
+	ctx.gs.inventory.open = false
+}
+
 crafting_set_output :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) {
 	if item == .nil || count <= 0 {
 		inv.crafting_output = {}
@@ -1711,14 +1777,21 @@ try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, outpu
 inventory_update :: proc() {
 	inv := &ctx.gs.inventory
 
+	if key_pressed(.ESC) {
+		consume_key_pressed(.ESC)
+		close_all_ui_overlays()
+	}
+
 	if key_pressed(.TAB) {
 		consume_key_pressed(.TAB)
-		if inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
+		next_open := !is_ui_overlay_open(UI_OVERLAY_INVENTORY)
+		if !next_open && inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
 			drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
 			spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
 			clear_inventory_drag(inv)
 		}
-		inv.open = !inv.open
+		inv.open = next_open
+		set_ui_overlay_open(UI_OVERLAY_INVENTORY, next_open)
 	}
 
 	if !inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
@@ -2211,6 +2284,39 @@ compute_hit_drop_spawn_pos :: proc(target: ^Entity) -> Vec2 {
 	return edge + offset
 }
 
+should_roll_bonus_sapling_drop :: proc(kind: Entity_Kind) -> bool {
+	#partial switch kind {
+	case .tree_ent, .sapling_ent, .sprout_ent:
+		return true
+	case:
+		return false
+	}
+}
+
+try_place_equipped_sapling :: proc(mouse_world: Vec2) -> bool {
+	item, count := get_equipped_item()
+	if item != .sapling || count <= 0 {
+		return false
+	}
+
+	_, hit_ok := find_hittable_entity_at_world_pos(mouse_world)
+	if hit_ok {
+		return false
+	}
+
+	place_pos := snap_vec2_to_grid(mouse_world, ENTITY_GRID_SIZE)
+	if is_world_position_blocked_for_player(place_pos) {
+		return false
+	}
+	if !consume_equipped_item(1) {
+		return false
+	}
+
+	e := entity_create(.sapling_ent)
+	e.pos = place_pos
+	return true
+}
+
 spawn_movement_indicator :: proc(pos: Vec2) -> ^Entity {
 	e := entity_create(.movement_indicator_fx)
 	e.pos = pos
@@ -2316,6 +2422,9 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	if target.break_drop_item != .nil && target.break_drop_count > 0 {
 		spawn_item_pickup_towards_player(target.break_drop_item, target.break_drop_count, compute_hit_drop_spawn_pos(target))
 	}
+	if should_roll_bonus_sapling_drop(target.kind) && roll_chance(0.5, u64(target.handle.id)+u64(ctx.gs.ticks)*733) {
+		spawn_item_pickup_towards_player(.sapling, 1, compute_hit_drop_spawn_pos(target))
+	}
 	entity_destroy(target)
 }
 
@@ -2364,7 +2473,7 @@ try_hit_entity_at_mouse :: proc(mouse_world: Vec2) -> (did_hit: bool, hit_handle
 }
 
 update_hold_hit_cycle :: proc() {
-	if !key_down(.LEFT_MOUSE) || ctx.gs.inventory.open {
+	if !key_down(.LEFT_MOUSE) || is_any_ui_overlay_open() {
 		clear_hold_hit_target()
 		return
 	}
@@ -2688,6 +2797,10 @@ consume_equipped_item :: proc(count: int) -> bool {
 }
 
 try_throw_equipped_dagger :: proc() {
+	if is_any_ui_overlay_open() {
+		return
+	}
+
 	if !key_pressed(.LEFT_MOUSE) {
 		return
 	}
@@ -2754,34 +2867,20 @@ setup_player :: proc(e: ^Entity) {
 	e.draw_pivot = .bottom_center
 
 	e.update_proc = proc(e: ^Entity) {
-		move_dir := get_input_vector()
-		if move_dir != {} {
-			e.has_move_target = false
-			e.has_queued_move_target = false
-			e.queued_move_target = {}
-			e.has_pending_interact = false
-			e.pending_interact = {}
-			e.pos += move_dir * 100.0 * ctx.delta_t
-		} else if e.has_move_target {
-			to_target := e.move_target - e.pos
-			dist_sq := to_target.x*to_target.x + to_target.y*to_target.y
-			if dist_sq <= 2.0*2.0 {
-				e.pos = e.move_target
-				if e.has_queued_move_target {
-					e.move_target = e.queued_move_target
-					e.has_move_target = true
-					e.has_queued_move_target = false
-					e.queued_move_target = {}
-				} else {
-					e.has_move_target = false
-					try_interact_pending_target(e)
-				}
-			} else {
-				dist := math.sqrt(dist_sq)
-				move_dir = to_target / dist
-				move_step := move_dir * 100.0 * ctx.delta_t
-				step_len := linalg.length(move_step)
-				if step_len > dist {
+		move_dir := Vec2{}
+		if !is_any_ui_overlay_open() {
+			move_dir = get_input_vector()
+			if move_dir != {} {
+				e.has_move_target = false
+				e.has_queued_move_target = false
+				e.queued_move_target = {}
+				e.has_pending_interact = false
+				e.pending_interact = {}
+				e.pos += move_dir * 100.0 * ctx.delta_t
+			} else if e.has_move_target {
+				to_target := e.move_target - e.pos
+				dist_sq := to_target.x*to_target.x + to_target.y*to_target.y
+				if dist_sq <= 2.0*2.0 {
 					e.pos = e.move_target
 					if e.has_queued_move_target {
 						e.move_target = e.queued_move_target
@@ -2793,7 +2892,24 @@ setup_player :: proc(e: ^Entity) {
 						try_interact_pending_target(e)
 					}
 				} else {
-					e.pos += move_step
+					dist := math.sqrt(dist_sq)
+					move_dir = to_target / dist
+					move_step := move_dir * 100.0 * ctx.delta_t
+					step_len := linalg.length(move_step)
+					if step_len > dist {
+						e.pos = e.move_target
+						if e.has_queued_move_target {
+							e.move_target = e.queued_move_target
+							e.has_move_target = true
+							e.has_queued_move_target = false
+							e.queued_move_target = {}
+						} else {
+							e.has_move_target = false
+							try_interact_pending_target(e)
+						}
+					} else {
+						e.pos += move_step
+					}
 				}
 			}
 		}
@@ -2980,7 +3096,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 
 	e.update_proc = proc(e: ^Entity) {
 		player := get_player()
-		if is_action_pressed(.interact) {
+		if !is_any_ui_overlay_open() && is_action_pressed(.interact) {
 			consume_action_pressed(.interact)
 			_ = interact_entity(player, e)
 		}
