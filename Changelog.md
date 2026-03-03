@@ -6,6 +6,7 @@
 - Moved debug toggles (hitboxes, overlap, durability) from always-on top-left HUD into the pause menu.
 - Fixed pause-menu debug button label sizing/alignment so text stays inside the button bounds.
 - Added a new pause-menu `Grid: ON/OFF` debug toggle and gated world-grid rendering behind it (defaults ON).
+- Fixed pause-menu button label anchoring to use rect centers so labels no longer render left-shifted/outside buttons.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
