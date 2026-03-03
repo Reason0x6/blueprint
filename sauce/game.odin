@@ -1202,7 +1202,7 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		// Tree collider is only the trunk section so players can overlap canopy.
 		size := get_sprite_size(e.sprite)
 		center := e.pos + Vec2{0, -51}
-		return shape.rect_make(center, Vec2{50, 20}, pivot=.bottom_center), true
+		return shape.rect_make(center, Vec2{50, 30}, pivot=.bottom_center), true
 	case .sapling_ent:
 		return shape.rect_make(e.pos + Vec2{0, -13}, Vec2{18, 13}, pivot=.bottom_center), true
 	case .sprout_ent:
@@ -2468,6 +2468,11 @@ draw_entity_default :: proc(e: Entity) {
 	if is_player_behind_entity(e) {
 		entity_col.a = 0.3
 	}
+	draw_flip_x := e.flip_x
+	if e.sprite == .player_run {
+		// Current run sheet faces opposite direction from idle; normalize facing here.
+		draw_flip_x = !draw_flip_x
+	}
 
 	if e.hit_flash.a > 0 {
 		outline_alpha := e.hit_flash.a
@@ -2475,23 +2480,23 @@ draw_entity_default :: proc(e: Entity) {
 			outline_alpha = min(1.0, outline_alpha * LOW_DURABILITY_FLASH_ALPHA_MULT)
 		}
 		outline_col := Vec4{1, 1, 1, outline_alpha}
-		draw_sprite(e.pos + Vec2{1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-		draw_sprite(e.pos + Vec2{-1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-		draw_sprite(e.pos + Vec2{0, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-		draw_sprite(e.pos + Vec2{0, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{-1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{0, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{0, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		if e.durability > 0 && e.durability < LOW_DURABILITY_FLASH_THRESHOLD {
-			draw_sprite(e.pos + Vec2{2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{-2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{0, 2}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{0, -2}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{-1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{-1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{-2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{0, 2}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{0, -2}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{-1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(e.pos + Vec2{-1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		}
 	}
 
-	draw_sprite_entity(&e, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot, col=entity_col)
+	draw_sprite_entity(&e, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=draw_flip_x, pivot=e.draw_pivot, col=entity_col)
 }
 
 // helper for drawing a sprite that's based on an entity.
@@ -2691,7 +2696,7 @@ setup_player :: proc(e: ^Entity) {
 		if move_dir.x != 0 {
 			e.last_known_x_dir = move_dir.x
 		}
-		e.flip_x = e.last_known_x_dir < 0
+		e.flip_x = e.last_known_x_dir > 0
 
 		is_moving := move_dir != {}
 		if is_moving {
@@ -2704,7 +2709,7 @@ setup_player :: proc(e: ^Entity) {
 	}
 
 	e.draw_proc = proc(e: Entity) {
-		draw_sprite(e.pos, .shadow_medium, col={1,1,1,0.2})
+		draw_sprite(e.pos + Vec2{0, -4}, .shadow_medium, col={1,1,1,0.2})
 		draw_entity_default(e)
 
 		equipped_item, equipped_count := get_equipped_item()
@@ -2892,7 +2897,7 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	sprite = .tree
 	draw_pivot = .center_center
 	blocks_player = true
-	set_entity_durability(e, 8)
+	set_entity_durability(e, 16)
 	break_drop_item = .wood
 	break_drop_count = 2
 	on_hit_proc = entity_on_hit_tree

@@ -1,6 +1,9 @@
 # Changelog
 
-## [HEAD] Suppress hit highlight for zero-damage hits
+## [HEAD] Normalize player run facing to match idle orientation
+- Added a run-sprite specific flip correction so `player_run` faces the same direction as `player_idle`.
+
+## [b19153c] Suppress hit highlight for zero-damage hits
 - `get_hit_durability_damage` now permits `0` damage results from held-item multipliers.
 - `entity_apply_hit` now only applies the white hit highlight when computed damage is greater than `0`.
 
