@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Use dagger_item_flying for thrown dagger animation/meta
+## [HEAD] Add baseline crafting items, recipes, and crafting UI
+- Added foundational crafting materials and intermediates (`wood`, `stone`, `fiber`, `stick`, `rope`, `stone_blade`) and seeded starter pickups in the world.
+- Implemented crafting state with a 2x3 crafting input grid plus a single output slot, integrated into the inventory panel UI.
+- Added recipe evaluation/ingredient consumption and drag-and-drop support between inventory/hotbar and crafting slots, with crafted output pickup via click.
+
+## [b47dae9] Use dagger_item_flying for thrown dagger animation/meta
 - Added `dagger_item_flying` to the sprite enum/data so runtime meta loading can pick up `res/images/dagger_item_flying.meta`.
 - Switched dagger projectile rendering from `dagger_item_thrown` to `dagger_item_flying`.
 - Included the new `dagger_item_flying.png/.meta` assets in source control.

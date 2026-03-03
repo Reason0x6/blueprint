@@ -71,6 +71,12 @@ DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
 
 Item_Kind :: enum u8 {
 	nil,
+	wood,
+	stone,
+	fiber,
+	stick,
+	rope,
+	stone_blade,
 	oblisk_fragment,
 	oblisk_core,
 	dagger_item,
@@ -86,8 +92,22 @@ Inventory_State :: struct {
 	equipped_slot: int, // index into slots
 	slots: [INVENTORY_SLOT_COUNT]Inventory_Slot,
 	dragging: bool,
-	drag_from_slot: int,
+	drag_from_slot: int, // index in inventory/crafting arrays
+	drag_from_kind: Drag_From_Kind,
 	drag_slot: Inventory_Slot,
+	crafting_slots: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot,
+	crafting_output: Inventory_Slot,
+}
+
+CRAFT_INPUT_COLS :: 2
+CRAFT_INPUT_ROWS :: 3
+CRAFT_INPUT_SLOT_COUNT :: CRAFT_INPUT_COLS * CRAFT_INPUT_ROWS
+
+Drag_From_Kind :: enum u8 {
+	none,
+	inventory,
+	craft_input,
+	craft_output,
 }
 
 //
@@ -580,6 +600,9 @@ game_update :: proc() {
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
 
+		spawn_item_pickup(.wood, 4, Vec2{-68, 8})
+		spawn_item_pickup(.stone, 3, Vec2{-86, 8})
+		spawn_item_pickup(.fiber, 4, Vec2{-104, 8})
 		spawn_item_pickup(.dagger_item, 1, Vec2{-55, 6})
 		
 	}
@@ -886,6 +909,12 @@ resolve_player_vs_hitboxes :: proc() {
 item_name :: proc(item: Item_Kind) -> string {
 	switch item {
 	case .nil: return ""
+	case .wood: return "Wood"
+	case .stone: return "Stone"
+	case .fiber: return "Fiber"
+	case .stick: return "Stick"
+	case .rope: return "Rope"
+	case .stone_blade: return "Stone Blade"
 	case .oblisk_fragment: return "Fragment"
 	case .oblisk_core: return "Core"
 	case .dagger_item: return "Dagger"
@@ -896,6 +925,12 @@ item_name :: proc(item: Item_Kind) -> string {
 item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	switch item {
 	case .nil: return .nil
+	case .wood: return .oblisk_broken
+	case .stone: return .oblisk_rest
+	case .fiber: return .player_still
+	case .stick: return .oblisk_broken
+	case .rope: return .player_idle
+	case .stone_blade: return .dagger_item
 	case .oblisk_fragment: return .oblisk_broken
 	case .oblisk_core: return .oblisk
 	case .dagger_item: return .dagger_item
@@ -906,6 +941,12 @@ item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 item_max_stack :: proc(item: Item_Kind) -> int {
 	switch item {
 	case .nil: return 0
+	case .wood: return 99
+	case .stone: return 99
+	case .fiber: return 99
+	case .stick: return 99
+	case .rope: return 99
+	case .stone_blade: return 99
 	case .oblisk_fragment: return 99
 	case .oblisk_core: return 10
 	case .dagger_item: return 1
@@ -970,6 +1011,119 @@ inventory_add_item :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -
 	return count - remaining
 }
 
+get_total_count_in_slots :: proc(slots: []Inventory_Slot, item: Item_Kind) -> int {
+	total := 0
+	for slot in slots {
+		if slot.item == item {
+			total += slot.count
+		}
+	}
+	return total
+}
+
+get_total_non_empty_count_in_slots :: proc(slots: []Inventory_Slot) -> int {
+	total := 0
+	for slot in slots {
+		if slot.item != .nil && slot.count > 0 {
+			total += slot.count
+		}
+	}
+	return total
+}
+
+crafting_set_output :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) {
+	if item == .nil || count <= 0 {
+		inv.crafting_output = {}
+		return
+	}
+	inv.crafting_output = {item=item, count=count}
+}
+
+update_crafting_output :: proc(inv: ^Inventory_State) {
+	input := inv.crafting_slots[:]
+	total_count := get_total_non_empty_count_in_slots(input)
+	if total_count == 0 {
+		crafting_set_output(inv, .nil, 0)
+		return
+	}
+
+	wood := get_total_count_in_slots(input, .wood)
+	stone := get_total_count_in_slots(input, .stone)
+	fiber := get_total_count_in_slots(input, .fiber)
+	stick := get_total_count_in_slots(input, .stick)
+	rope := get_total_count_in_slots(input, .rope)
+
+	// 2 wood -> 2 stick
+	if wood == 2 && total_count == 2 {
+		crafting_set_output(inv, .stick, 2)
+		return
+	}
+
+	// 2 fiber -> 1 rope
+	if fiber == 2 && total_count == 2 {
+		crafting_set_output(inv, .rope, 1)
+		return
+	}
+
+	// 1 stone + 1 stick -> 1 stone blade
+	if stone == 1 && stick == 1 && total_count == 2 {
+		crafting_set_output(inv, .stone_blade, 1)
+		return
+	}
+
+	// 1 stone blade + 1 stick + 1 rope -> 1 dagger
+	if get_total_count_in_slots(input, .stone_blade) == 1 && stick == 1 && rope == 1 && total_count == 3 {
+		crafting_set_output(inv, .dagger_item, 1)
+		return
+	}
+
+	crafting_set_output(inv, .nil, 0)
+}
+
+consume_item_from_crafting_slots :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -> bool {
+	remaining := count
+	for i in 0..<len(inv.crafting_slots) {
+		slot := &inv.crafting_slots[i]
+		if slot.item != item do continue
+		if slot.count <= 0 do continue
+
+		take := min(slot.count, remaining)
+		slot.count -= take
+		remaining -= take
+		if slot.count <= 0 {
+			slot^ = {}
+		}
+		if remaining <= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, output: Inventory_Slot) -> bool {
+	if output.item == .nil || output.count <= 0 {
+		return false
+	}
+
+	#partial switch output.item {
+	case .stick:
+		return consume_item_from_crafting_slots(inv, .wood, 2)
+	case .rope:
+		return consume_item_from_crafting_slots(inv, .fiber, 2)
+	case .stone_blade:
+		a := consume_item_from_crafting_slots(inv, .stone, 1)
+		b := consume_item_from_crafting_slots(inv, .stick, 1)
+		return a && b
+	case .dagger_item:
+		a := consume_item_from_crafting_slots(inv, .stone_blade, 1)
+		b := consume_item_from_crafting_slots(inv, .stick, 1)
+		c := consume_item_from_crafting_slots(inv, .rope, 1)
+		return a && b && c
+	case:
+		return false
+	}
+}
+
 inventory_update :: proc() {
 	inv := &ctx.gs.inventory
 
@@ -977,6 +1131,8 @@ inventory_update :: proc() {
 		consume_key_pressed(.TAB)
 		inv.open = !inv.open
 	}
+
+	update_crafting_output(inv)
 
 	// Hotbar quick equip (1..6).
 	for i in 0..<HOTBAR_SLOT_COUNT {
@@ -1093,10 +1249,14 @@ hotbar_slot_rect :: proc(i: int) -> shape.Rect {
 	return shape.rect_make(pos, slot_size, pivot=.bottom_left)
 }
 
-inventory_grid_slot_rect :: proc(i: int) -> shape.Rect {
+inventory_panel_rect :: proc() -> shape.Rect {
 	cx, cy := screen_pivot(.center_center)
-	panel_size := Vec2{170, 76}
-	panel := shape.rect_make(Vec2{cx, cy + 20}, panel_size, pivot=.center_center)
+	panel_size := Vec2{262, 92}
+	return shape.rect_make(Vec2{cx, cy + 20}, panel_size, pivot=.center_center)
+}
+
+inventory_grid_slot_rect :: proc(i: int) -> shape.Rect {
+	panel := inventory_panel_rect()
 
 	cols :: 6
 	slot_size := Vec2{22, 22}
@@ -1107,6 +1267,25 @@ inventory_grid_slot_rect :: proc(i: int) -> shape.Rect {
 	row := i / cols
 	pos := grid_start + Vec2{f32(col) * (slot_size.x + gap), f32(1-row) * (slot_size.y + gap)}
 	return shape.rect_make(pos, slot_size, pivot=.bottom_left)
+}
+
+crafting_input_slot_rect :: proc(i: int) -> shape.Rect {
+	panel := inventory_panel_rect()
+
+	slot_size := Vec2{22, 22}
+	gap: f32 = 3
+	grid_start := Vec2{panel.x + 166, panel.y + 8}
+
+	col := i % CRAFT_INPUT_COLS
+	row := i / CRAFT_INPUT_COLS
+	pos := grid_start + Vec2{f32(col) * (slot_size.x + gap), f32(CRAFT_INPUT_ROWS-1-row) * (slot_size.y + gap)}
+	return shape.rect_make(pos, slot_size, pivot=.bottom_left)
+}
+
+crafting_output_slot_rect :: proc() -> shape.Rect {
+	panel := inventory_panel_rect()
+	slot_size := Vec2{22, 22}
+	return shape.rect_make(Vec2{panel.x + 231, panel.y + 35}, slot_size, pivot=.bottom_left)
 }
 
 find_inventory_slot_at_mouse :: proc(inv: ^Inventory_State, mouse_pos: Vec2) -> (slot_index: int, ok: bool) {
@@ -1130,84 +1309,168 @@ find_inventory_slot_at_mouse :: proc(inv: ^Inventory_State, mouse_pos: Vec2) -> 
 	return 0, false
 }
 
+find_crafting_input_slot_at_mouse :: proc(inv: ^Inventory_State, mouse_pos: Vec2) -> (slot_index: int, ok: bool) {
+	if !inv.open {
+		return 0, false
+	}
+	for i in 0..<CRAFT_INPUT_SLOT_COUNT {
+		rect := crafting_input_slot_rect(i)
+		if shape.rect_contains(rect, mouse_pos) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+is_crafting_output_hovered :: proc(inv: ^Inventory_State, mouse_pos: Vec2) -> bool {
+	if !inv.open {
+		return false
+	}
+	return shape.rect_contains(crafting_output_slot_rect(), mouse_pos)
+}
+
 clear_inventory_drag :: proc(inv: ^Inventory_State) {
 	inv.dragging = false
 	inv.drag_from_slot = -1
+	inv.drag_from_kind = .none
 	inv.drag_slot = {}
 }
 
-drop_dragged_slot :: proc(inv: ^Inventory_State, drop_index: int, drop_ok: bool) {
-	if !inv.dragging || inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
-		clear_inventory_drag(inv)
+put_drag_into_slot :: proc(dst: ^Inventory_Slot, drag: ^Inventory_Slot) {
+	if drag.item == .nil || drag.count <= 0 {
 		return
 	}
 
-	from := inv.drag_from_slot
-	drag := inv.drag_slot
-	target_index := drop_index
-
-	if !drop_ok || target_index < 0 || target_index >= INVENTORY_SLOT_COUNT {
-		target_index = from
-	}
-
-	if target_index == from {
-		inv.slots[from] = drag
-		clear_inventory_drag(inv)
-		return
-	}
-
-	dst := &inv.slots[target_index]
 	if dst.item == .nil || dst.count <= 0 {
-		dst^ = drag
-		clear_inventory_drag(inv)
+		dst^ = drag^
+		drag^ = {}
 		return
 	}
 
 	if dst.item == drag.item {
 		max_stack := item_max_stack(drag.item)
-		free := max(0, max_stack - dst.count)
+		free := max(0, max_stack-dst.count)
 		to_add := min(free, drag.count)
 		dst.count += to_add
-		remaining := drag.count - to_add
-
-		if remaining > 0 {
-			inv.slots[from] = {item=drag.item, count=remaining}
+		drag.count -= to_add
+		if drag.count <= 0 {
+			drag^ = {}
 		}
+		return
+	}
 
+	tmp := dst^
+	dst^ = drag^
+	drag^ = tmp
+}
+
+place_remaining_drag_back_to_source :: proc(inv: ^Inventory_State) {
+	if !inv.dragging || inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
 		clear_inventory_drag(inv)
 		return
 	}
 
-	// Swap with destination item.
-	tmp := dst^
-	dst^ = drag
-	inv.slots[from] = tmp
-	clear_inventory_drag(inv)
+	switch inv.drag_from_kind {
+	case .inventory:
+		if inv.drag_from_slot >= 0 && inv.drag_from_slot < INVENTORY_SLOT_COUNT {
+			put_drag_into_slot(&inv.slots[inv.drag_from_slot], &inv.drag_slot)
+		}
+	case .craft_input:
+		if inv.drag_from_slot >= 0 && inv.drag_from_slot < CRAFT_INPUT_SLOT_COUNT {
+			put_drag_into_slot(&inv.crafting_slots[inv.drag_from_slot], &inv.drag_slot)
+		}
+	case .craft_output:
+		// crafted output has no source slot to return to
+	case .none:
+	}
+
+	if inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
+		clear_inventory_drag(inv)
+	}
 }
 
 draw_inventory_ui :: proc() {
 	inv := &ctx.gs.inventory
 	mouse_pos := mouse_pos_in_current_space()
+	update_crafting_output(inv)
 
 	if key_pressed(.LEFT_MOUSE) {
-		slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
-		if slot_ok && !inv.dragging {
-			inv.equipped_slot = slot_index
-			slot := &inv.slots[slot_index]
-			if slot.item != .nil && slot.count > 0 {
-				inv.dragging = true
-				inv.drag_from_slot = slot_index
-				inv.drag_slot = slot^
-				slot^ = {}
+		if !inv.dragging {
+			consumed_click := false
+
+			// Claim crafting output first.
+			if is_crafting_output_hovered(inv, mouse_pos) && inv.crafting_output.item != .nil && inv.crafting_output.count > 0 {
+				if try_consume_crafting_ingredients_for_output(inv, inv.crafting_output) {
+					inv.dragging = true
+					inv.drag_from_slot = -1
+					inv.drag_from_kind = .craft_output
+					inv.drag_slot = inv.crafting_output
+					update_crafting_output(inv)
+				}
+				consumed_click = true
 			}
-			consume_key_pressed(.LEFT_MOUSE)
+
+			// Then allow grabbing crafting input slots.
+			if !consumed_click {
+				craft_i, craft_ok := find_crafting_input_slot_at_mouse(inv, mouse_pos)
+				if craft_ok {
+					slot := &inv.crafting_slots[craft_i]
+					if slot.item != .nil && slot.count > 0 {
+						inv.dragging = true
+						inv.drag_from_slot = craft_i
+						inv.drag_from_kind = .craft_input
+						inv.drag_slot = slot^
+						slot^ = {}
+						update_crafting_output(inv)
+					}
+					consumed_click = true
+				}
+			}
+
+			// Finally inventory/hotbar slots.
+			if !consumed_click {
+				slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
+				if slot_ok {
+					inv.equipped_slot = slot_index
+					slot := &inv.slots[slot_index]
+					if slot.item != .nil && slot.count > 0 {
+						inv.dragging = true
+						inv.drag_from_slot = slot_index
+						inv.drag_from_kind = .inventory
+						inv.drag_slot = slot^
+						slot^ = {}
+					}
+					consumed_click = true
+				}
+			}
+
+			if consumed_click {
+				consume_key_pressed(.LEFT_MOUSE)
+			}
 		}
 	}
 
 	if key_released(.LEFT_MOUSE) && inv.dragging {
+		released := false
+
 		slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
 		if slot_ok {
-			drop_dragged_slot(inv, slot_index, slot_ok)
+			put_drag_into_slot(&inv.slots[slot_index], &inv.drag_slot)
+			released = true
+		} else {
+			craft_i, craft_ok := find_crafting_input_slot_at_mouse(inv, mouse_pos)
+			if craft_ok {
+				put_drag_into_slot(&inv.crafting_slots[craft_i], &inv.drag_slot)
+				released = true
+			}
+		}
+
+		if released {
+			if inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
+				place_remaining_drag_back_to_source(inv)
+			} else {
+				clear_inventory_drag(inv)
+			}
 		} else {
 			if inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
 				drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
@@ -1215,6 +1478,8 @@ draw_inventory_ui :: proc() {
 			}
 			clear_inventory_drag(inv)
 		}
+
+		update_crafting_output(inv)
 		consume_key_released(.LEFT_MOUSE)
 	}
 
@@ -1242,17 +1507,28 @@ draw_inventory_ui :: proc() {
 
 	// Full inventory panel
 	{
-		cx, cy := screen_pivot(.center_center)
-		panel_size := Vec2{170, 76}
-		panel := shape.rect_make(Vec2{cx, cy + 20}, panel_size, pivot=.center_center)
+		panel := inventory_panel_rect()
 		draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.9}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
-		draw_text(Vec2{panel.x + 6, panel.w - 4}, "Inventory [TAB]", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
+		draw_text(Vec2{panel.x + 6, panel.w - 4}, "Inventory + Crafting [TAB]", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
 
 		for i in 0..<INVENTORY_SLOT_COUNT {
 			rect := inventory_grid_slot_rect(i)
 			hover := shape.rect_contains(rect, mouse_pos)
 			draw_inventory_slot(rect, inv.slots[i], selected=inv.equipped_slot == i, hover=hover)
 		}
+
+		draw_text(Vec2{panel.x + 166, panel.w - 4}, "Craft", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.8}, drop_shadow_col=Vec4{})
+
+		for i in 0..<CRAFT_INPUT_SLOT_COUNT {
+			rect := crafting_input_slot_rect(i)
+			hover := shape.rect_contains(rect, mouse_pos)
+			draw_inventory_slot(rect, inv.crafting_slots[i], selected=false, hover=hover)
+		}
+
+		out_rect := crafting_output_slot_rect()
+		out_hover := shape.rect_contains(out_rect, mouse_pos)
+		draw_inventory_slot(out_rect, inv.crafting_output, selected=false, hover=out_hover)
+		draw_text(out_rect.xy + Vec2{-10, 10}, "=>", z_layer=.ui, col=Vec4{1, 1, 1, 0.75}, drop_shadow_col=Vec4{})
 	}
 
 	if inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
