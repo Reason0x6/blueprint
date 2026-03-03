@@ -95,11 +95,18 @@ HIT_DROP_MAX_FROM_EDGE: f32 : 40
 LOW_DURABILITY_FLASH_THRESHOLD :: 3
 LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
-FOREST_GRASS_TILE_CHANCE: f32 : 1.0/3.0
 PLAYER_MOVE_SPEED: f32 : 112.0
+BIOME_CHUNK_SIZE_TILES :: 64
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
+
+Biome_Kind :: enum u8 {
+	desert,
+	plains,
+	forest,
+	ruins,
+}
 
 Item_Kind :: enum u8 {
 	nil,
@@ -297,6 +304,10 @@ Sprite_Name :: enum {
 	shadow_medium,
 	bg_repeat_tex0,
 	forest_grass_texture,
+	desert_bg_tile,
+	plains_bg_tile,
+	forest_bg_tile,
+	ruins_bg_tile,
 	dagger_item,
 	dagger_item_flying,
 	movement_indicator,
@@ -1074,10 +1085,11 @@ game_draw :: proc() {
 	// world
 	{
 		push_coord_space(get_world_space())
-		draw_world_forest_grass_tiles()
+		draw_world_biome_tiles()
 		if ctx.gs.debug_show_grid {
 			draw_world_grid()
 		}
+		draw_placeable_range_circle()
 		draw_placeable_preview()
 
 		draw_order := make([dynamic]Entity_Handle, 0, len(get_all_ents()), allocator=context.temp_allocator)
@@ -1181,16 +1193,87 @@ draw_placeable_preview :: proc() {
 	draw_sprite(place_pos, sprite, pivot=.center_center, col=col, z_layer=.vfx)
 }
 
-is_forest_grass_tile :: proc(tile_x: int, tile_y: int) -> bool {
-	seed := u64(i64(tile_x)*1103515245 + i64(tile_y)*214013 + 2531011)
-	seed = seed ~ 0x9E3779B97F4A7C15
-	return random01_from_seed(seed) < FOREST_GRASS_TILE_CHANCE
+floor_div_int :: proc(v: int, d: int) -> int {
+	if d == 0 do return 0
+	q := v / d
+	r := v % d
+	if r != 0 && ((r > 0) != (d > 0)) {
+		q -= 1
+	}
+	return q
 }
 
-draw_world_forest_grass_tiles :: proc() {
+get_biome_for_chunk :: proc(chunk_x: int, chunk_y: int) -> Biome_Kind {
+	seed := u64(i64(chunk_x)*1103515245 + i64(chunk_y)*214013 + 2531011)
+	seed = seed ~ 0x9E3779B97F4A7C15
+	r := random01_from_seed(seed)
+	if r < 0.25 do return .desert
+	if r < 0.50 do return .plains
+	if r < 0.75 do return .forest
+	return .ruins
+}
+
+biome_tile_sprite :: proc(biome: Biome_Kind) -> Sprite_Name {
+	#partial switch biome {
+	case .desert:
+		return .desert_bg_tile
+	case .plains:
+		return .plains_bg_tile
+	case .forest:
+		return .forest_bg_tile
+	case .ruins:
+		return .ruins_bg_tile
+	}
+	return .nil
+}
+
+biome_fallback_col :: proc(biome: Biome_Kind) -> Vec4 {
+	#partial switch biome {
+	case .desert:
+		return Vec4{0.73, 0.66, 0.42, 1.0}
+	case .plains:
+		return Vec4{0.37, 0.56, 0.31, 1.0}
+	case .forest:
+		return Vec4{0.21, 0.38, 0.24, 1.0}
+	case .ruins:
+		return Vec4{0.38, 0.39, 0.42, 1.0}
+	}
+	return Vec4{0.4, 0.4, 0.4, 1.0}
+}
+
+draw_placeable_range_circle :: proc() {
+	if is_any_ui_overlay_open() {
+		return
+	}
+
+	player := get_player()
+	if !is_valid(player^) {
+		return
+	}
+
+	item, count := get_equipped_item()
+	if count <= 0 {
+		return
+	}
+	_, ok := get_placeable_preview_sprite(item)
+	if !ok {
+		return
+	}
+
+	segments := 72
+	step := f32(2.0 * math.PI) / f32(segments)
+	for i in 0..<segments {
+		a := f32(i) * step
+		p := player.pos + Vec2{math.cos(a), math.sin(a)} * PLACE_PREVIEW_RANGE
+		dot := shape.rect_make(p, Vec2{1, 1}, pivot=.center_center)
+		draw_rect(dot, col=Vec4{1, 1, 1, 0.17}, z_layer=.shadow)
+	}
+}
+
+draw_world_biome_tiles :: proc() {
 	tile_size := get_sprite_size(.bg_repeat_tex0)
 	if tile_size.x <= 0 || tile_size.y <= 0 {
-		return
+		tile_size = Vec2{16, 16}
 	}
 
 	center := ctx.gs.cam_pos
@@ -1206,9 +1289,18 @@ draw_world_forest_grass_tiles :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			if is_forest_grass_tile(tx, ty) {
-				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
-				draw_sprite(tile_center, .forest_grass_texture, pivot=.center_center)
+			chunk_x := floor_div_int(tx, BIOME_CHUNK_SIZE_TILES)
+			chunk_y := floor_div_int(ty, BIOME_CHUNK_SIZE_TILES)
+			biome := get_biome_for_chunk(chunk_x, chunk_y)
+			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
+
+			biome_sprite := biome_tile_sprite(biome)
+			biome_sprite_size := get_sprite_size(biome_sprite)
+			if biome_sprite != .nil && biome_sprite_size.x > 0 && biome_sprite_size.y > 0 {
+				draw_sprite_in_rect(biome_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+			} else {
+				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
+				draw_rect(tile_rect, col=biome_fallback_col(biome))
 			}
 			tx += 1
 		}

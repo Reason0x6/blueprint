@@ -205,6 +205,15 @@ Sprite :: struct {
 }
 sprites: [Sprite_Name]Sprite
 
+is_optional_biome_tile_sprite :: proc(img_name: Sprite_Name) -> bool {
+	#partial switch img_name {
+	case .desert_bg_tile, .plains_bg_tile, .forest_bg_tile, .ruins_bg_tile:
+		return true
+	case:
+		return false
+	}
+}
+
 load_sprites_into_atlas :: proc() {
 	img_dir := "res/images/"
 	
@@ -213,7 +222,12 @@ load_sprites_into_atlas :: proc() {
 		
 		path := fmt.tprint(img_dir, img_name, ".png", sep="")
 		png_data, png_err := os.read_entire_file_from_path(path, context.temp_allocator)
-		assert(png_err == nil, fmt.tprint(path, "not found"))
+		if png_err != nil {
+			if is_optional_biome_tile_sprite(img_name) {
+				continue
+			}
+			assert(false, fmt.tprint(path, "not found"))
+		}
 		
 		stbi.set_flip_vertically_on_load(1)
 		width, height, channels: i32
