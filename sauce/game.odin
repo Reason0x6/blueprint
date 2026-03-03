@@ -1472,7 +1472,7 @@ TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
 TERRAIN_TILESET_BLOCK_ROWS :: 6
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
-WATER_COLLISION_OVERSIZE_PX: f32 : 2.0
+WATER_COLLISION_OVERSIZE_PX: f32 : 15.0
 
 clear_terrain_block_hitboxes :: proc() {
 	for i in 0..=TERRAIN_MAX_BLOCK_INDEX {
@@ -1507,7 +1507,6 @@ setup_terrain_block_hitboxes :: proc() {
 		set_terrain_block_hitbox(block, Vec2{0, 0}, Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE})
 	}
 }
-
 positive_mod_int :: proc(v: int, m: int) -> int {
 	if m <= 0 do return 0
 	r := v % m
@@ -1620,11 +1619,15 @@ get_terrain_block_hitbox_rect :: proc(tile_x: int, tile_y: int) -> (shape.Rect, 
 is_world_pos_in_terrain_block_collision :: proc(pos: Vec2) -> bool {
 	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
 	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
-	rect, ok := get_terrain_block_hitbox_rect(tile_x, tile_y)
-	if !ok {
-		return false
+	for oy := -1; oy <= 1; oy += 1 {
+		for ox := -1; ox <= 1; ox += 1 {
+			rect, ok := get_terrain_block_hitbox_rect(tile_x+ox, tile_y+oy)
+			if ok && shape.rect_contains(rect, pos) {
+				return true
+			}
+		}
 	}
-	return shape.rect_contains(rect, pos)
+	return false
 }
 
 is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> bool {
@@ -1709,10 +1712,10 @@ is_rect_touching_water_collision :: proc(rect: shape.Rect) -> bool {
 }
 
 is_rect_touching_terrain_block_collision :: proc(rect: shape.Rect) -> bool {
-	min_tile_x := int(math.floor(rect.x / ENTITY_GRID_SIZE))
-	max_tile_x := int(math.floor(rect.z / ENTITY_GRID_SIZE))
-	min_tile_y := int(math.floor(rect.y / ENTITY_GRID_SIZE))
-	max_tile_y := int(math.floor(rect.w / ENTITY_GRID_SIZE))
+	min_tile_x := int(math.floor(rect.x / ENTITY_GRID_SIZE)) - 1
+	max_tile_x := int(math.floor(rect.z / ENTITY_GRID_SIZE)) + 1
+	min_tile_y := int(math.floor(rect.y / ENTITY_GRID_SIZE)) - 1
+	max_tile_y := int(math.floor(rect.w / ENTITY_GRID_SIZE)) + 1
 
 	ty := min_tile_y
 	for ty <= max_tile_y {
