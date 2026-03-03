@@ -1687,7 +1687,8 @@ snap_vec2_to_grid :: proc(v: Vec2, grid: f32) -> Vec2 {
 
 snap_vec2_to_grid_center :: proc(v: Vec2, grid: f32) -> Vec2 {
 	if grid <= 0 do return v
-	return snap_vec2_to_grid(v, grid) + Vec2{grid * 0.5, grid * 0.5}
+	half := Vec2{grid * 0.5, grid * 0.5}
+	return snap_vec2_to_grid(v-half, grid) + half
 }
 
 rounded_hitbox_sub_rects :: proc(rect: shape.Rect, corner_cut: f32) -> ([2]shape.Rect, bool) {

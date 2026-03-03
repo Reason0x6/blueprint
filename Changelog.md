@@ -33,6 +33,7 @@
 - Set terrain block selector back to a constant fill of block `11` for full-map flat-ground tiling.
 - Changed grid-snapped entity placement to snap to tile centers (`+ grid*0.5`) instead of tile edges.
 - Terrain block-number labels now render only when grid debug is enabled (`Grid: ON`).
+- Fixed center-grid snapping drift by snapping relative to half-tile offset (`snap(pos-half)+half`) so snapped entities stay stable instead of translating each frame.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
