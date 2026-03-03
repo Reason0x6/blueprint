@@ -235,7 +235,6 @@ Sprite_Name :: enum {
 	shadow_medium,
 	bg_repeat_tex0,
 	dagger_item,
-	dagger_item_thrown,
 	dagger_item_flying,
 	movement_indicator,
 	player_death,
@@ -259,7 +258,6 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.player_run = {frame_count=3, overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.player_death = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.dagger_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
-	.dagger_item_thrown = {frame_count=7},
 	.dagger_item_flying = {frame_count=7},
 	.movement_indicator = {frame_count=6},
 	.tree = {overlap_box_size=Vec2{16, 20}, overlap_box_offset=Vec2{0, -16}, overlap_box_pivot=.bottom_center},
@@ -1262,8 +1260,14 @@ hotbar_slot_rect :: proc(i: int) -> shape.Rect {
 
 inventory_panel_rect :: proc() -> shape.Rect {
 	cx, cy := screen_pivot(.center_center)
-	panel_size := Vec2{262, 92}
-	return shape.rect_make(Vec2{cx, cy + 20}, panel_size, pivot=.center_center)
+	panel_size := Vec2{170, 92}
+	return shape.rect_make(Vec2{cx - 50, cy + 20}, panel_size, pivot=.center_center)
+}
+
+crafting_panel_rect :: proc() -> shape.Rect {
+	cx, cy := screen_pivot(.center_center)
+	panel_size := Vec2{84, 92}
+	return shape.rect_make(Vec2{cx + 82, cy + 20}, panel_size, pivot=.center_center)
 }
 
 inventory_grid_slot_rect :: proc(i: int) -> shape.Rect {
@@ -1281,11 +1285,11 @@ inventory_grid_slot_rect :: proc(i: int) -> shape.Rect {
 }
 
 crafting_input_slot_rect :: proc(i: int) -> shape.Rect {
-	panel := inventory_panel_rect()
+	panel := crafting_panel_rect()
 
 	slot_size := Vec2{22, 22}
 	gap: f32 = 3
-	grid_start := Vec2{panel.x + 166, panel.y + 8}
+	grid_start := Vec2{panel.x + 8, panel.y + 8}
 
 	col := i % CRAFT_INPUT_COLS
 	row := i / CRAFT_INPUT_COLS
@@ -1294,9 +1298,9 @@ crafting_input_slot_rect :: proc(i: int) -> shape.Rect {
 }
 
 crafting_output_slot_rect :: proc() -> shape.Rect {
-	panel := inventory_panel_rect()
+	panel := crafting_panel_rect()
 	slot_size := Vec2{22, 22}
-	return shape.rect_make(Vec2{panel.x + 231, panel.y + 35}, slot_size, pivot=.bottom_left)
+	return shape.rect_make(Vec2{panel.x + 54, panel.y + 35}, slot_size, pivot=.bottom_left)
 }
 
 find_inventory_slot_at_mouse :: proc(inv: ^Inventory_State, mouse_pos: Vec2) -> (slot_index: int, ok: bool) {
@@ -1518,9 +1522,9 @@ draw_inventory_ui :: proc() {
 
 	// Full inventory panel
 	{
-		panel := inventory_panel_rect()
-		draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.9}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
-		draw_text(Vec2{panel.x + 6, panel.w - 4}, "Inventory + Crafting [TAB]", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
+		inv_panel := inventory_panel_rect()
+		draw_rect(inv_panel, col=Vec4{0.02, 0.02, 0.02, 0.9}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
+		draw_text(Vec2{inv_panel.x + 6, inv_panel.w - 4}, "Inventory [TAB]", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
 
 		for i in 0..<INVENTORY_SLOT_COUNT {
 			rect := inventory_grid_slot_rect(i)
@@ -1528,7 +1532,9 @@ draw_inventory_ui :: proc() {
 			draw_inventory_slot(rect, inv.slots[i], selected=inv.equipped_slot == i, hover=hover)
 		}
 
-		draw_text(Vec2{panel.x + 166, panel.w - 4}, "Craft", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.8}, drop_shadow_col=Vec4{})
+		craft_panel := crafting_panel_rect()
+		draw_rect(craft_panel, col=Vec4{0.02, 0.02, 0.02, 0.9}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
+		draw_text(Vec2{craft_panel.x + 6, craft_panel.w - 4}, "Craft", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.8}, drop_shadow_col=Vec4{})
 
 		for i in 0..<CRAFT_INPUT_SLOT_COUNT {
 			rect := crafting_input_slot_rect(i)

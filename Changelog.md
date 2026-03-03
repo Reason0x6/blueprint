@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Add tree entity using Tree texture
+## [HEAD] Split inventory and crafting into separate UI panels
+- Separated the combined inventory/crafting layout into two distinct boxes with independent panel rects.
+- Kept existing drag/drop behavior and slot hit-testing intact by reusing the same slot helper procs with updated panel anchors.
+- Updated panel headers so inventory and crafting each have clear labels in their own boxes.
+
+## [b184fe2] Add tree entity using Tree texture
 - Added a new `tree_ent` entity kind and `tree` sprite entry mapped to `Tree.png`, with tree-specific setup and draw behavior.
 - Added a trunk-focused blocking hitbox for trees so canopy overlap still works while the trunk blocks movement.
 - Spawned a tree instance at game start for immediate in-world testing.
