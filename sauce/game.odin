@@ -1185,7 +1185,15 @@ draw_inventory_ui :: proc() {
 
 	if key_released(.LEFT_MOUSE) && inv.dragging {
 		slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
-		drop_dragged_slot(inv, slot_index, slot_ok)
+		if slot_ok {
+			drop_dragged_slot(inv, slot_index, slot_ok)
+		} else {
+			if inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
+				drop_pos := mouse_pos_in_world_space()
+				spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
+			}
+			clear_inventory_drag(inv)
+		}
 		consume_key_released(.LEFT_MOUSE)
 	}
 

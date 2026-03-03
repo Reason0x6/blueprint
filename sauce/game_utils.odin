@@ -222,3 +222,21 @@ mouse_pos_in_current_space :: proc() -> Vec2 {
 	
 	return mouse_world.xy
 }
+
+mouse_pos_in_world_space :: proc() -> Vec2 {
+	mouse := Vec2{state.mouse_x, state.mouse_y}
+
+	ndc_x := (mouse.x / (f32(window_w) * 0.5)) - 1.0
+	ndc_y := (mouse.y / (f32(window_h) * 0.5)) - 1.0
+	ndc_y *= -1
+
+	mouse_ndc := Vec2{ndc_x, ndc_y}
+	mouse_world := Vec4{mouse_ndc.x, mouse_ndc.y, 0, 1}
+
+	proj := get_world_space_proj()
+	cam := get_world_space_camera()
+	mouse_world = linalg.inverse(proj) * mouse_world
+	mouse_world = cam * mouse_world
+
+	return mouse_world.xy
+}
