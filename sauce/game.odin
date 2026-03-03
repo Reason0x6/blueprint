@@ -1255,7 +1255,7 @@ rounded_hitbox_contains_point :: proc(rect: shape.Rect, p: Vec2, corner_cut: f32
 
 should_grid_snap_entity :: proc(e: Entity) -> bool {
 	#partial switch e.kind {
-	case .player, .dagger_projectile, .movement_indicator_fx:
+	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx:
 		return false
 	case:
 		return true

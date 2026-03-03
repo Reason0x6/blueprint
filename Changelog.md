@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Add stone blade/multitool textures and bounce hit-drops toward player
+## [HEAD] Fix hit-drop bounce by excluding item pickups from grid snapping
+- Removed `item_pickup` from grid snap targets so bounced drops keep their velocity-based movement toward the player.
+- Fixes tree wood on-hit drops appearing static instead of traveling toward the player.
+
+## [6d74ea5] Add stone blade/multitool textures and bounce hit-drops toward player
 - Added sprite support for `stone_blade.png` and `stone_multitool.png`, and mapped `stone_blade` / `stone_multitool` item icons to those textures.
 - Added `spawn_item_pickup_towards_player` for entity hit drops so dropped items get initial velocity toward the player and a short pickup delay.
 - Updated tree on-hit wood drops and durability break drops to use the bounce-to-player drop path.
