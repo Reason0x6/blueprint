@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Drop inventory throws just outside auto-pickup radius
+## [HEAD] Use dagger_item_flying for thrown dagger animation/meta
+- Added `dagger_item_flying` to the sprite enum/data so runtime meta loading can pick up `res/images/dagger_item_flying.meta`.
+- Switched dagger projectile rendering from `dagger_item_thrown` to `dagger_item_flying`.
+- Included the new `dagger_item_flying.png/.meta` assets in source control.
+
+## [2081454] Drop inventory throws just outside auto-pickup radius
 - Changed drag-out inventory drops to spawn just outside the player's auto-pickup area instead of exactly at mouse world position.
 - Added shared pickup/drop radius constants and aligned auto-pickup range checks to use them.
 - Uses mouse direction from the player to choose the drop side, with facing-direction fallback when cursor direction is degenerate.

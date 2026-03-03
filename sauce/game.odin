@@ -214,6 +214,7 @@ Sprite_Name :: enum {
 	bg_repeat_tex0,
 	dagger_item,
 	dagger_item_thrown,
+	dagger_item_flying,
 	movement_indicator,
 	player_death,
 	player_run,
@@ -236,6 +237,7 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.player_death = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.dagger_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.dagger_item_thrown = {frame_count=7},
+	.dagger_item_flying = {frame_count=7},
 	.movement_indicator = {frame_count=6},
 
 	.oblisk = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
@@ -1710,7 +1712,7 @@ setup_item_pickup :: proc(using e: ^Entity) {
 
 setup_dagger_projectile :: proc(using e: ^Entity) {
 	kind = .dagger_projectile
-	sprite = .dagger_item_thrown
+	sprite = .dagger_item_flying
 	draw_pivot = .center_center
 	blocks_player = false
 	max_distance = 500
