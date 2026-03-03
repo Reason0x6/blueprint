@@ -1,6 +1,12 @@
 # Changelog
 
-## [HEAD] Fix hit-drop bounce by excluding item pickups from grid snapping
+## [HEAD] Add item-based hit cooldown UI/hold gating and white hit flash outline
+- Added item-based hit cooldown attributes via `item_hit_cooldown`, and now left-click usage starts cooldown from the currently equipped item.
+- Holding left mouse now only applies repeat hits when cooldown is finished, instead of using a fixed repeat timer.
+- Added a world-space cooldown bar under the player showing remaining hit cooldown after click/use.
+- Added per-hit white flash outline rendering on hit entities with timed fade-out.
+
+## [c78b49c] Fix hit-drop bounce by excluding item pickups from grid snapping
 - Removed `item_pickup` from grid snap targets so bounced drops keep their velocity-based movement toward the player.
 - Fixes tree wood on-hit drops appearing static instead of traveling toward the player.
 

@@ -58,7 +58,8 @@ Game_State :: struct {
 	debug_show_durability: bool,
 	hold_hit_target: Entity_Handle,
 	has_hold_hit_target: bool,
-	next_hold_hit_time: f64,
+	hit_cooldown_end_time: f64,
+	hit_cooldown_duration: f64,
 	inventory: Inventory_State,
 
 	scratch: struct {
@@ -76,10 +77,10 @@ HITBOX_CORNER_CUT: f32 : 3
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 DURABILITY_REGEN_DELAY_SEC: f64 : 1.0
 DURABILITY_REGEN_PER_SEC: f32 : 1.0
-HOLD_HIT_INTERVAL_SEC: f64 : 0.6
 ITEM_DROP_BOUNCE_SPEED: f32 : 95
 ITEM_DROP_BOUNCE_DRAG: f32 : 6.5
 ITEM_DROP_PICKUP_DELAY_SEC: f64 : 0.25
+HIT_FLASH_DURATION_SEC: f32 : 0.12
 
 Item_Kind :: enum u8 {
 	nil,
@@ -894,6 +895,7 @@ game_update :: proc() {
 			e.update_proc(e)
 		}
 		update_entity_durability_regen(e)
+		update_entity_hit_flash(e)
 	}
 
 	apply_entity_grid_snap()
@@ -926,17 +928,20 @@ game_update :: proc() {
 
 	if key_pressed(.LEFT_MOUSE) && !ctx.gs.inventory.open {
 		pos := mouse_pos_in_current_space()
-		did_hit, hit_handle := try_hit_entity_at_mouse(pos)
-		if did_hit {
-			ctx.gs.has_hold_hit_target = true
-			ctx.gs.hold_hit_target = hit_handle
-			ctx.gs.next_hold_hit_time = now() + HOLD_HIT_INTERVAL_SEC
-		} else {
-			clear_hold_hit_target()
+		begin_hold_hit_target_from_mouse(pos)
+
+		if is_hit_cooldown_ready() {
+			did_hit, hit_handle := try_hit_entity_at_mouse(pos)
+			if did_hit {
+				ctx.gs.has_hold_hit_target = true
+				ctx.gs.hold_hit_target = hit_handle
+			}
+			item, _ := get_equipped_item()
+			start_hit_cooldown_for_item(item)
+			sound_play("event:/schloop", pos=pos)
 		}
 
 		consume_key_pressed(.LEFT_MOUSE)
-		sound_play("event:/schloop", pos=pos)
 	} else if key_pressed(.LEFT_MOUSE) && ctx.gs.inventory.open {
 		clear_hold_hit_target()
 	}
@@ -1027,6 +1032,8 @@ game_draw :: proc() {
 				draw_entity_durability_debug(e^)
 			}
 		}
+
+		draw_player_hit_cooldown_bar()
 	}
 }
 
@@ -1064,6 +1071,31 @@ draw_entity_durability_debug :: proc(e: Entity) {
 
 	label := fmt.tprintf("%v", e.durability)
 	draw_text(pos, label, pivot=.bottom_center, z_layer=.top, col=Vec4{1, 0.95, 0.35, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.8})
+}
+
+draw_player_hit_cooldown_bar :: proc() {
+	player := get_player()
+	if !is_valid(player^) {
+		return
+	}
+	if ctx.gs.hit_cooldown_duration <= 0 {
+		return
+	}
+
+	remaining := max(0.0, ctx.gs.hit_cooldown_end_time-now())
+	if remaining <= 0 {
+		return
+	}
+
+	pct := math.clamp(f32(remaining/ctx.gs.hit_cooldown_duration), 0, 1)
+	bar_size := Vec2{20, 3}
+	bar_pos := player.pos + Vec2{0, -4}
+	bg := shape.rect_make(bar_pos, bar_size, pivot=.top_center)
+	fill_size := Vec2{bar_size.x * pct, bar_size.y}
+	fill := shape.rect_make(Vec2{bg.x, bg.y}, fill_size, pivot=.bottom_left)
+
+	draw_rect(bg, col=Vec4{0.05, 0.05, 0.05, 0.7}, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.top)
+	draw_rect(fill, col=Vec4{1.0, 0.85, 0.2, 0.9}, z_layer=.top)
 }
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {
@@ -1361,6 +1393,33 @@ item_max_stack :: proc(item: Item_Kind) -> int {
 	case .dagger_item: return 1
 	case: return 0
 	}
+}
+
+item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
+	switch item {
+	case .nil: return 0.6
+	case .wood: return 0.6
+	case .stone: return 0.7
+	case .fiber: return 0.5
+	case .stick: return 0.45
+	case .rope: return 0.5
+	case .stone_blade: return 0.35
+	case .stone_multitool: return 0.25
+	case .oblisk_fragment: return 0.5
+	case .oblisk_core: return 0.6
+	case .dagger_item: return 0.45
+	case: return 0.6
+	}
+}
+
+start_hit_cooldown_for_item :: proc(item: Item_Kind) {
+	dur := item_hit_cooldown(item)
+	ctx.gs.hit_cooldown_duration = dur
+	ctx.gs.hit_cooldown_end_time = now() + dur
+}
+
+is_hit_cooldown_ready :: proc() -> bool {
+	return now() >= ctx.gs.hit_cooldown_end_time
 }
 
 inventory_add_item :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -> (added: int) {
@@ -2055,6 +2114,17 @@ update_entity_durability_regen :: proc(e: ^Entity) {
 	}
 }
 
+update_entity_hit_flash :: proc(e: ^Entity) {
+	if e.hit_flash.a <= 0 {
+		return
+	}
+
+	e.hit_flash.a -= ctx.delta_t / HIT_FLASH_DURATION_SEC
+	if e.hit_flash.a < 0 {
+		e.hit_flash.a = 0
+	}
+}
+
 entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	if !is_valid(target^) {
 		return
@@ -2068,6 +2138,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		return
 	}
 
+	target.hit_flash = Vec4{1, 1, 1, 1}
 	target.last_hit_time = now()
 	target.durability_regen_accum = 0
 	target.durability -= 1
@@ -2101,7 +2172,17 @@ find_hittable_entity_at_world_pos :: proc(mouse_world: Vec2) -> (^Entity, bool) 
 clear_hold_hit_target :: proc() {
 	ctx.gs.has_hold_hit_target = false
 	ctx.gs.hold_hit_target = {}
-	ctx.gs.next_hold_hit_time = 0
+}
+
+begin_hold_hit_target_from_mouse :: proc(mouse_world: Vec2) {
+	target, ok := find_hittable_entity_at_world_pos(mouse_world)
+	if !ok {
+		clear_hold_hit_target()
+		return
+	}
+
+	ctx.gs.has_hold_hit_target = true
+	ctx.gs.hold_hit_target = target.handle
 }
 
 try_hit_entity_at_mouse :: proc(mouse_world: Vec2) -> (did_hit: bool, hit_handle: Entity_Handle) {
@@ -2125,7 +2206,7 @@ update_hold_hit_cycle :: proc() {
 		return
 	}
 
-	if now() < ctx.gs.next_hold_hit_time {
+	if !is_hit_cooldown_ready() {
 		return
 	}
 
@@ -2137,8 +2218,9 @@ update_hold_hit_cycle :: proc() {
 	}
 
 	player := get_player()
+	item, _ := get_equipped_item()
 	entity_apply_hit(target, player)
-	ctx.gs.next_hold_hit_time = now() + HOLD_HIT_INTERVAL_SEC
+	start_hit_cooldown_for_item(item)
 	sound_play("event:/schloop", pos=mouse_world)
 }
 
@@ -2325,6 +2407,14 @@ draw_entity_default :: proc(e: Entity) {
 		entity_col.a = 0.3
 	}
 
+	if e.hit_flash.a > 0 {
+		outline_col := Vec4{1, 1, 1, e.hit_flash.a}
+		draw_sprite(e.pos + Vec2{1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{-1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{0, 1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(e.pos + Vec2{0, -1}, e.sprite, pivot=e.draw_pivot, flip_x=e.flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+	}
+
 	draw_sprite_entity(&e, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot, col=entity_col)
 }
 
@@ -2420,6 +2510,10 @@ try_throw_equipped_dagger :: proc() {
 	if item != .dagger_item || count <= 0 {
 		return
 	}
+	if !is_hit_cooldown_ready() {
+		consume_key_pressed(.LEFT_MOUSE)
+		return
+	}
 
 	player := get_player()
 	if !is_valid(player^) {
@@ -2450,6 +2544,7 @@ try_throw_equipped_dagger :: proc() {
 	p.flip_x = dir.x < 0
 	p.rotation = throw_rot
 
+	start_hit_cooldown_for_item(item)
 	consume_key_pressed(.LEFT_MOUSE)
 }
 
