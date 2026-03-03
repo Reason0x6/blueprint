@@ -4,5 +4,10 @@
 # - water => water.png tile
 # - _ or empty => empty tile
 
-island_1 = [[11,20,20,20,11,11,20,20,20,11],
-[12,water,water,water,10,11,11,11,11,11]]
+island_1 = [
+  [11, 11, 11, 20, 20, 20, 11, 11, 20, 20, 20, 11],
+  [11, 11, 12, "water", "water", "water", 10, 21, "water", "water", "water", 10],
+  [11,  7,  7,  7,  2,  2, 12, "water", "water", "water", "water", 10],
+  [ 5, "water", "water", "water", 11, 11, 12, "water", "water", "water", "water", 10],
+  [11, 11, 12, "water", 19, 20, 21, "water", "water", "water", "water", 10]
+]

@@ -70,6 +70,7 @@ Game_State :: struct {
 	swing_dir: Vec2,
 	inventory: Inventory_State,
 	spawned_vegetation_chunks: [dynamic]u64,
+	terrain_structure_instances: [dynamic]Terrain_Structure_Instance,
 
 	scratch: struct {
 		all_entities: []Entity_Handle,
@@ -184,6 +185,12 @@ Terrain_Structure :: struct {
 	rows: int,
 	cols: int,
 	tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]Terrain_Tile,
+}
+
+Terrain_Structure_Instance :: struct {
+	structure_index: int,
+	origin_tile_x: int,
+	origin_tile_y: int,
 }
 
 terrain_structures: [dynamic]Terrain_Structure
@@ -1140,6 +1147,8 @@ game_update :: proc() {
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.debug_show_grid = true
+		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
+		_ = spawn_terrain_structure("island_1", Vec2{-160, -64})
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
@@ -1419,41 +1428,62 @@ positive_mod_int :: proc(v: int, m: int) -> int {
 	return r
 }
 
-zigzag_int :: proc(v: int) -> int {
-	if v >= 0 {
-		return v * 2
+find_terrain_structure_index_by_name :: proc(name: string) -> (int, bool) {
+	if len(terrain_structures) == 0 {
+		return -1, false
 	}
-	return (-v * 2) - 1
+
+	for i in 0..<len(terrain_structures) {
+		if terrain_structures[i].name == name {
+			return i, true
+		}
+	}
+	return -1, false
 }
 
-terrain_structure_index_for_chunk :: proc(chunk_x: int, chunk_y: int) -> int {
-	if len(terrain_structures) == 0 {
-		return -1
+spawn_terrain_structure_at_tile :: proc(name: string, origin_tile_x: int, origin_tile_y: int) -> bool {
+	structure_index, ok := find_terrain_structure_index_by_name(name)
+	if !ok {
+		log.warnf("spawn_terrain_structure: unknown structure %q", name)
+		return false
 	}
-	order_key := zigzag_int(chunk_y)*2048 + zigzag_int(chunk_x)
-	return positive_mod_int(order_key, len(terrain_structures))
+
+	append(&ctx.gs.terrain_structure_instances, Terrain_Structure_Instance{
+		structure_index = structure_index,
+		origin_tile_x = origin_tile_x,
+		origin_tile_y = origin_tile_y,
+	})
+	return true
+}
+
+spawn_terrain_structure :: proc(name: string, world_pos: Vec2) -> bool {
+	origin_tile_x := int(math.floor(world_pos.x / ENTITY_GRID_SIZE))
+	origin_tile_y := int(math.floor(world_pos.y / ENTITY_GRID_SIZE))
+	return spawn_terrain_structure_at_tile(name, origin_tile_x, origin_tile_y)
 }
 
 terrain_tile_for_tile :: proc(tile_x: int, tile_y: int) -> Terrain_Tile {
-	if len(terrain_structures) == 0 {
-		return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
-	}
+	// Later-spawned structures take priority where they overlap.
+	for i := len(ctx.gs.terrain_structure_instances) - 1; i >= 0; i -= 1 {
+		inst := ctx.gs.terrain_structure_instances[i]
+		if inst.structure_index < 0 || inst.structure_index >= len(terrain_structures) {
+			continue
+		}
 
-	chunk_x := floor_div_int(tile_x, BIOME_CHUNK_SIZE_TILES)
-	chunk_y := floor_div_int(tile_y, BIOME_CHUNK_SIZE_TILES)
-	struct_idx := terrain_structure_index_for_chunk(chunk_x, chunk_y)
-	if struct_idx < 0 || struct_idx >= len(terrain_structures) {
-		return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
-	}
+		st := terrain_structures[inst.structure_index]
+		if st.cols <= 0 || st.rows <= 0 {
+			continue
+		}
 
-	st := terrain_structures[struct_idx]
-	if st.cols <= 0 || st.rows <= 0 {
-		return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
-	}
+		rel_x := tile_x - inst.origin_tile_x
+		rel_y := tile_y - inst.origin_tile_y
+		if rel_x < 0 || rel_y < 0 || rel_x >= st.cols || rel_y >= st.rows {
+			continue
+		}
 
-	lx := positive_mod_int(tile_x, st.cols)
-	ly := positive_mod_int(tile_y, st.rows)
-	return st.tiles[ly][lx]
+		return st.tiles[rel_y][rel_x]
+	}
+	return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
 }
 
 terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {

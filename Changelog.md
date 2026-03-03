@@ -41,7 +41,8 @@
 - Refactored entity break drops from single `break_drop_item/count` fields to a multi-drop list (`break_drops + break_drop_len`) so an entity can define more than one guaranteed item drop on break.
 - Added data-driven terrain structure loading from `res/data/terrain_structures.txt` using syntax like `name = [[...],[...]]`, where each array position maps directly to tile column/row.
 - Added terrain structure tokens for numeric block indices (`1..54`) and `water`, with `water` tiles rendering `water.png`.
-- Terrain generation now resolves tiles from structure definitions in deterministic chunk order, while keeping a default fallback structure when no file is present.
+- Terrain structures can now be manually spawned in code via `spawn_terrain_structure(name, world_pos)`/`spawn_terrain_structure_at_tile`, with a startup example spawn wired for `island_1`.
+- Terrain tile resolution now uses spawned structure instances (last-spawned wins on overlap), with block `11` fallback for unoccupied tiles.
 - Terrain rendering now draws a water underlay beneath non-water tiles so transparent pixels in terrain block sprites reveal water below.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
