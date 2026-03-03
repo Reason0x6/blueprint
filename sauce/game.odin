@@ -877,6 +877,10 @@ draw_pause_menu_ui :: proc() {
 		return
 	}
 
+	sx, sy := screen_pivot(.center_center)
+	screen_rect := shape.rect_make(Vec2{sx, sy}, Vec2{f32(GAME_RES_WIDTH), f32(GAME_RES_HEIGHT)}, pivot=.center_center)
+	draw_rect(screen_rect, col=Vec4{0.5, 0.5, 0.5, 0.35}, z_layer=.pause_menu)
+
 	cx, cy := screen_pivot(.center_center)
 	panel_size := Vec2{180, 86}
 	panel := shape.rect_make(Vec2{cx, cy}, panel_size, pivot=.center_center)
