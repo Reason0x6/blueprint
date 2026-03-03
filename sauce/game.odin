@@ -2898,6 +2898,11 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	if target.break_drop_item != .nil && target.break_drop_count > 0 {
 		spawn_item_pickup_towards_player(target.break_drop_item, target.break_drop_count, compute_hit_drop_spawn_pos(target))
 	}
+	if target.kind == .tree_ent {
+		// Tree breaks should always leave a sprout in the world.
+		sprout := entity_create(.sprout_ent)
+		sprout.pos = target.pos
+	}
 	if should_roll_bonus_sapling_drop(target.kind) && roll_chance(0.5, u64(target.handle.id)+u64(ctx.gs.ticks)*733) {
 		spawn_item_pickup_towards_player(.sapling, 1, compute_hit_drop_spawn_pos(target))
 	}
