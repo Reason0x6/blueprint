@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Merge same-item stacks on left-click placement
+## [HEAD] Add sapling/sprout world entities and item-only resource textures
+- Added `sapling_ent` and `sprout_ent` setups with startup world spawns so both can be placed/tested as standalone entities.
+- Added explicit hitbox definitions for sapling and sprout entity kinds, with saplings blocking player movement and sprouts remaining non-blocking.
+- Updated resource item icon mapping so `wood`, `stick`, and `fiber` now use `wood_item`, `sticks_item`, and `fibre_item` textures instead of placeholder sprites.
+
+## [8fb4623] Merge same-item stacks on left-click placement
 - Updated held-item left-click placement so clicking a slot with the same item now merges into that slot instead of swapping.
 - Merge respects max stack size and keeps any overflow in the held stack.
 - Preserves existing left-click swap behavior for different item types.

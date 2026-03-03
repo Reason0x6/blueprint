@@ -197,6 +197,8 @@ Entity_Kind :: enum {
 	player,
 	oblisk_ent,
 	tree_ent,
+	sapling_ent,
+	sprout_ent,
 	item_pickup,
 	dagger_projectile,
 	movement_indicator_fx,
@@ -212,6 +214,8 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 		case .player: setup_player(e)
 		case .oblisk_ent: setup_oblisk_ent(e) // for now, just use the same setup as the normal oblisk ent
 		case .tree_ent: setup_tree_ent(e)
+		case .sapling_ent: setup_sapling_ent(e)
+		case .sprout_ent: setup_sprout_ent(e)
 		case .item_pickup: setup_item_pickup(e)
 		case .dagger_projectile: setup_dagger_projectile(e)
 		case .movement_indicator_fx: setup_movement_indicator_fx(e)
@@ -254,6 +258,11 @@ Sprite_Name :: enum {
 	player_death,
 	player_run,
 	player_idle,
+	wood_item,
+	sticks_item,
+	fibre_item,
+	sapling,
+	sprout,
 	tree,
 	oblisk,
 	oblisk_rest,
@@ -273,7 +282,12 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.player_death = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.dagger_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.dagger_item_flying = {frame_count=7},
+	.wood_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.sticks_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
+	.fibre_item = {overlap_box_size=Vec2{8, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.center_center},
 	.movement_indicator = {frame_count=6},
+	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, -6}, overlap_box_pivot=.bottom_center},
+	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, -10}, overlap_box_pivot=.bottom_center},
 	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, -51}, overlap_box_pivot=.bottom_center},
 
 	.oblisk = {overlap_box_size=Vec2{12, 22}, overlap_box_offset=Vec2{0, -24}, overlap_box_pivot=.bottom_center},
@@ -802,6 +816,10 @@ game_update :: proc() {
 		oblisk.pos = Vec2{64, 0}
 		tree := entity_create(.tree_ent)
 		tree.pos = Vec2{26, 0}
+		sapling := entity_create(.sapling_ent)
+		sapling.pos = Vec2{8, 4}
+		sprout := entity_create(.sprout_ent)
+		sprout.pos = Vec2{-20, 4}
 
 		spawn_item_pickup(.wood, 4, Vec2{-68, 8})
 		spawn_item_pickup(.stone, 3, Vec2{-86, 8})
@@ -1056,6 +1074,10 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		size := get_sprite_size(e.sprite)
 		center := e.pos + Vec2{0, -51}
 		return shape.rect_make(center, Vec2{50, 20}, pivot=.bottom_center), true
+	case .sapling_ent:
+		return shape.rect_make(e.pos + Vec2{0, -7}, Vec2{12, 8}, pivot=.bottom_center), true
+	case .sprout_ent:
+		return shape.rect_make(e.pos + Vec2{0, -4}, Vec2{8, 6}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -1216,10 +1238,10 @@ item_name :: proc(item: Item_Kind) -> string {
 item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	switch item {
 	case .nil: return .nil
-	case .wood: return .oblisk_broken
+	case .wood: return .wood_item
 	case .stone: return .oblisk_rest
-	case .fiber: return .player_still
-	case .stick: return .oblisk_broken
+	case .fiber: return .fibre_item
+	case .stick: return .sticks_item
 	case .rope: return .player_idle
 	case .stone_blade: return .dagger_item
 	case .oblisk_fragment: return .oblisk_broken
@@ -2401,6 +2423,30 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	sprite = .tree
 	draw_pivot = .center_center
 	blocks_player = true
+
+	e.update_proc = proc(_: ^Entity) {}
+	e.draw_proc = proc(e: Entity) {
+		draw_entity_default(e)
+	}
+}
+
+setup_sapling_ent :: proc(using e: ^Entity) {
+	kind = .sapling_ent
+	sprite = .sapling
+	draw_pivot = .center_center
+	blocks_player = true
+
+	e.update_proc = proc(_: ^Entity) {}
+	e.draw_proc = proc(e: Entity) {
+		draw_entity_default(e)
+	}
+}
+
+setup_sprout_ent :: proc(using e: ^Entity) {
+	kind = .sprout_ent
+	sprite = .sprout
+	draw_pivot = .center_center
+	blocks_player = false
 
 	e.update_proc = proc(_: ^Entity) {}
 	e.draw_proc = proc(e: Entity) {
