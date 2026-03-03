@@ -1185,17 +1185,23 @@ draw_placeable_preview :: proc() {
 		return
 	}
 
-	mouse_world := mouse_pos_in_current_space()
-	_, hit_ok := find_hittable_entity_at_world_pos(mouse_world)
-	if hit_ok {
-		return
-	}
+	place_pos := Vec2{}
+	if player.has_pending_place && player.pending_place_item == item {
+		// Lock preview to the original clicked target while auto-moving to place.
+		place_pos = player.pending_place_pos
+	} else {
+		mouse_world := mouse_pos_in_current_space()
+		_, hit_ok := find_hittable_entity_at_world_pos(mouse_world)
+		if hit_ok {
+			return
+		}
 
-	place_pos := snap_vec2_to_grid_center(mouse_world, ENTITY_GRID_SIZE)
-	diff := place_pos - player.pos
-	d2 := diff.x*diff.x + diff.y*diff.y
-	if d2 > PLACE_PREVIEW_RANGE*PLACE_PREVIEW_RANGE {
-		return
+		place_pos = snap_vec2_to_grid_center(mouse_world, ENTITY_GRID_SIZE)
+		diff := place_pos - player.pos
+		d2 := diff.x*diff.x + diff.y*diff.y
+		if d2 > PLACE_PREVIEW_RANGE*PLACE_PREVIEW_RANGE {
+			return
+		}
 	}
 
 	col := Vec4{1, 1, 1, 0.35}

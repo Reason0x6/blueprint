@@ -35,6 +35,7 @@
 - Terrain block-number labels now render only when grid debug is enabled (`Grid: ON`).
 - Fixed center-grid snapping drift by snapping relative to half-tile offset (`snap(pos-half)+half`) so snapped entities stay stable instead of translating each frame.
 - Aligned placeable preview and placement target snapping to tile centers so preview location matches actual placed entity location.
+- Locked placeable preview to `pending_place_pos` while the player is auto-moving to place, preventing camera/mouse world-space drift from making the target appear to move.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
