@@ -86,7 +86,7 @@ DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
 INTERACT_RANGE: f32 : 40
 PLACE_PREVIEW_RANGE: f32 : INTERACT_RANGE * 2
 ENTITY_GRID_SIZE: f32 : 32
-HITBOX_CORNER_CUT: f32 : 3
+HITBOX_CORNER_CUT: f32 : 9
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 DURABILITY_REGEN_DELAY_SEC: f64 : 0.5
 DURABILITY_REGEN_PER_SEC: f32 : 2.0
@@ -1472,7 +1472,7 @@ TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
 TERRAIN_TILESET_BLOCK_ROWS :: 6
 TERRAIN_DEFAULT_BLOCK_INDEX :: 11
 TERRAIN_MAX_BLOCK_INDEX :: 54
-WATER_COLLISION_OVERSIZE_PX: f32 : 15.0
+WATER_COLLISION_OVERSIZE_PX: f32 : 8.0
 
 clear_terrain_block_hitboxes :: proc() {
 	for i in 0..=TERRAIN_MAX_BLOCK_INDEX {
@@ -1747,6 +1747,10 @@ draw_water_collision_debug :: proc() {
 	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
 
 	ty := min_tile_y
+	layer: ZLayer = .top
+	if is_game_paused() {
+		layer = .pause_menu
+	}
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
@@ -1754,7 +1758,7 @@ draw_water_collision_debug :: proc() {
 			if tile.kind == .water {
 				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
-				draw_rect(tile_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.75, 1.0, 0.85}, z_layer=.top)
+				draw_rect(tile_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.75, 1.0, 0.85}, z_layer=layer)
 			}
 			tx += 1
 		}
@@ -1774,12 +1778,16 @@ draw_terrain_block_collision_debug :: proc() {
 	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
 
 	ty := min_tile_y
+	layer: ZLayer = .top
+	if is_game_paused() {
+		layer = .pause_menu
+	}
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
 			rect, ok := get_terrain_block_hitbox_rect(tx, ty)
 			if ok {
-				draw_rect(rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1.0, 0.62, 0.2, 0.88}, z_layer=.top)
+				draw_rect(rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1.0, 0.62, 0.2, 0.88}, z_layer=layer)
 			}
 			tx += 1
 		}
@@ -2055,7 +2063,11 @@ draw_entity_hitbox_debug :: proc(e: Entity) {
 		return
 	}
 
-	draw_rect(hitbox, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1, 0.2, 0.2, 0.95}, z_layer=.top)
+	layer: ZLayer = .top
+	if is_game_paused() {
+		layer = .pause_menu
+	}
+	draw_rect(hitbox, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1, 0.2, 0.2, 0.95}, z_layer=layer)
 }
 
 draw_entity_overlap_debug :: proc(e: Entity) {
