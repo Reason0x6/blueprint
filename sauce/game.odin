@@ -1407,7 +1407,18 @@ inventory_update :: proc() {
 
 	if key_pressed(.TAB) {
 		consume_key_pressed(.TAB)
+		if inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
+			drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
+			spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
+			clear_inventory_drag(inv)
+		}
 		inv.open = !inv.open
+	}
+
+	if !inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
+		drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
+		spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
+		clear_inventory_drag(inv)
 	}
 
 	update_crafting_output(inv)
@@ -1623,57 +1634,58 @@ clear_inventory_drag :: proc(inv: ^Inventory_State) {
 	inv.drag_slot = {}
 }
 
-put_drag_into_slot :: proc(dst: ^Inventory_Slot, drag: ^Inventory_Slot) {
-	if drag.item == .nil || drag.count <= 0 {
-		return
+pick_up_slot_into_hand :: proc(inv: ^Inventory_State, slot: ^Inventory_Slot, from_kind: Drag_From_Kind, from_slot: int) -> bool {
+	if slot.item == .nil || slot.count <= 0 {
+		return false
 	}
-
-	if dst.item == .nil || dst.count <= 0 {
-		dst^ = drag^
-		drag^ = {}
-		return
+	if inv.dragging {
+		return false
 	}
-
-	if dst.item == drag.item {
-		max_stack := item_max_stack(drag.item)
-		free := max(0, max_stack-dst.count)
-		to_add := min(free, drag.count)
-		dst.count += to_add
-		drag.count -= to_add
-		if drag.count <= 0 {
-			drag^ = {}
-		}
-		return
-	}
-
-	tmp := dst^
-	dst^ = drag^
-	drag^ = tmp
+	inv.dragging = true
+	inv.drag_from_slot = from_slot
+	inv.drag_from_kind = from_kind
+	inv.drag_slot = slot^
+	slot^ = {}
+	return true
 }
 
-place_remaining_drag_back_to_source :: proc(inv: ^Inventory_State) {
+place_held_stack_swap :: proc(inv: ^Inventory_State, dst: ^Inventory_Slot) -> bool {
 	if !inv.dragging || inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
-		clear_inventory_drag(inv)
-		return
+		return false
 	}
-
-	switch inv.drag_from_kind {
-	case .inventory:
-		if inv.drag_from_slot >= 0 && inv.drag_from_slot < INVENTORY_SLOT_COUNT {
-			put_drag_into_slot(&inv.slots[inv.drag_from_slot], &inv.drag_slot)
-		}
-	case .craft_input:
-		if inv.drag_from_slot >= 0 && inv.drag_from_slot < CRAFT_INPUT_SLOT_COUNT {
-			put_drag_into_slot(&inv.crafting_slots[inv.drag_from_slot], &inv.drag_slot)
-		}
-	case .craft_output:
-		// crafted output has no source slot to return to
-	case .none:
-	}
-
+	tmp := dst^
+	dst^ = inv.drag_slot
+	inv.drag_slot = tmp
 	if inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
 		clear_inventory_drag(inv)
 	}
+	return true
+}
+
+place_held_one :: proc(inv: ^Inventory_State, dst: ^Inventory_Slot) -> bool {
+	if !inv.dragging || inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
+		return false
+	}
+
+	if dst.item == .nil || dst.count <= 0 {
+		dst.item = inv.drag_slot.item
+		dst.count = 1
+		inv.drag_slot.count -= 1
+	} else {
+		if dst.item != inv.drag_slot.item {
+			return false
+		}
+		if dst.count >= item_max_stack(dst.item) {
+			return false
+		}
+		dst.count += 1
+		inv.drag_slot.count -= 1
+	}
+
+	if inv.drag_slot.count <= 0 {
+		clear_inventory_drag(inv)
+	}
+	return true
 }
 
 draw_inventory_ui :: proc() {
@@ -1682,92 +1694,73 @@ draw_inventory_ui :: proc() {
 	update_crafting_output(inv)
 
 	if key_pressed(.LEFT_MOUSE) {
-		if !inv.dragging {
-			consumed_click := false
+		consumed_click := false
 
-			// Claim crafting output first.
-			if is_crafting_output_hovered(inv, mouse_pos) && inv.crafting_output.item != .nil && inv.crafting_output.count > 0 {
-				if try_consume_crafting_ingredients_for_output(inv, inv.crafting_output) {
-					inv.dragging = true
-					inv.drag_from_slot = -1
-					inv.drag_from_kind = .craft_output
-					inv.drag_slot = inv.crafting_output
-					update_crafting_output(inv)
+		// Claim crafting output first.
+		if is_crafting_output_hovered(inv, mouse_pos) && inv.crafting_output.item != .nil && inv.crafting_output.count > 0 {
+			if !inv.dragging && try_consume_crafting_ingredients_for_output(inv, inv.crafting_output) {
+				inv.dragging = true
+				inv.drag_from_slot = -1
+				inv.drag_from_kind = .craft_output
+				inv.drag_slot = inv.crafting_output
+				update_crafting_output(inv)
+			}
+			consumed_click = true
+		}
+
+		// Then crafting input slots.
+		if !consumed_click {
+			craft_i, craft_ok := find_crafting_input_slot_at_mouse(inv, mouse_pos)
+			if craft_ok {
+				slot := &inv.crafting_slots[craft_i]
+				if inv.dragging {
+					_ = place_held_stack_swap(inv, slot)
+				} else {
+					_ = pick_up_slot_into_hand(inv, slot, .craft_input, craft_i)
+				}
+				update_crafting_output(inv)
+				consumed_click = true
+			}
+		}
+
+		// Finally inventory/hotbar slots.
+		if !consumed_click {
+			slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
+			if slot_ok {
+				inv.equipped_slot = slot_index
+				slot := &inv.slots[slot_index]
+				if inv.dragging {
+					_ = place_held_stack_swap(inv, slot)
+				} else {
+					_ = pick_up_slot_into_hand(inv, slot, .inventory, slot_index)
 				}
 				consumed_click = true
 			}
+		}
 
-			// Then allow grabbing crafting input slots.
-			if !consumed_click {
-				craft_i, craft_ok := find_crafting_input_slot_at_mouse(inv, mouse_pos)
-				if craft_ok {
-					slot := &inv.crafting_slots[craft_i]
-					if slot.item != .nil && slot.count > 0 {
-						inv.dragging = true
-						inv.drag_from_slot = craft_i
-						inv.drag_from_kind = .craft_input
-						inv.drag_slot = slot^
-						slot^ = {}
-						update_crafting_output(inv)
-					}
-					consumed_click = true
-				}
-			}
-
-			// Finally inventory/hotbar slots.
-			if !consumed_click {
-				slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
-				if slot_ok {
-					inv.equipped_slot = slot_index
-					slot := &inv.slots[slot_index]
-					if slot.item != .nil && slot.count > 0 {
-						inv.dragging = true
-						inv.drag_from_slot = slot_index
-						inv.drag_from_kind = .inventory
-						inv.drag_slot = slot^
-						slot^ = {}
-					}
-					consumed_click = true
-				}
-			}
-
-			if consumed_click {
-				consume_key_pressed(.LEFT_MOUSE)
-			}
+		if consumed_click {
+			consume_key_pressed(.LEFT_MOUSE)
 		}
 	}
 
-	if key_released(.LEFT_MOUSE) && inv.dragging {
-		released := false
-
+	if key_pressed(.RIGHT_MOUSE) && inv.dragging {
+		consumed_click := false
 		slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
 		if slot_ok {
-			put_drag_into_slot(&inv.slots[slot_index], &inv.drag_slot)
-			released = true
+			inv.equipped_slot = slot_index
+			_ = place_held_one(inv, &inv.slots[slot_index])
+			consumed_click = true
 		} else {
 			craft_i, craft_ok := find_crafting_input_slot_at_mouse(inv, mouse_pos)
 			if craft_ok {
-				put_drag_into_slot(&inv.crafting_slots[craft_i], &inv.drag_slot)
-				released = true
+				_ = place_held_one(inv, &inv.crafting_slots[craft_i])
+				update_crafting_output(inv)
+				consumed_click = true
 			}
 		}
-
-		if released {
-			if inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
-				place_remaining_drag_back_to_source(inv)
-			} else {
-				clear_inventory_drag(inv)
-			}
-		} else {
-			if inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
-				drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
-				spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
-			}
-			clear_inventory_drag(inv)
+		if consumed_click {
+			consume_key_pressed(.RIGHT_MOUSE)
 		}
-
-		update_crafting_output(inv)
-		consume_key_released(.LEFT_MOUSE)
 	}
 
 	// Hotbar

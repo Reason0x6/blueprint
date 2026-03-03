@@ -1,6 +1,12 @@
 # Changelog
 
-## [HEAD] Add data-driven crafting recipe file format and loader
+## [HEAD] Switch inventory interaction to held-item click placement
+- Changed inventory/crafting interaction to click-to-hold semantics instead of drag-release semantics.
+- Left click on a slot now places the held stack and swaps with any existing stack in that slot.
+- Right click on a slot now places exactly one held item when the slot is empty or has the same item.
+- Closing the inventory while holding items now drops the held stack into the world automatically.
+
+## [83823cb] Add data-driven crafting recipe file format and loader
 - Added a simple editable recipe file at `res/data/crafting_recipes.txt` using `input_item:count + input_item:count -> output_item:count` syntax.
 - Replaced hardcoded crafting recipe matching/consumption with generic runtime recipes loaded from the file at startup.
 - Added parser helpers, token-to-item mapping, and default fallback recipes when the file is missing or invalid.
