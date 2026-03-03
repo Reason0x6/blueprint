@@ -205,7 +205,7 @@ Sprite :: struct {
 }
 sprites: [Sprite_Name]Sprite
 
-is_optional_biome_tile_sprite :: proc(img_name: Sprite_Name) -> bool {
+is_optional_terrain_sprite :: proc(img_name: Sprite_Name) -> bool {
 	#partial switch img_name {
 	case .desert_bg_tile, .plains_bg_tile, .plains_0, .plains_1, .plains_2, .plains_3, .plains_4, .tilemap_color1, .forest_bg_tile, .ruins_bg_tile:
 		return true
@@ -219,11 +219,14 @@ load_sprites_into_atlas :: proc() {
 	
 	for img_name in Sprite_Name {
 		if img_name == .nil do continue
-		
+
 		path := fmt.tprint(img_dir, img_name, ".png", sep="")
+		if img_name == .tilemap_color1 {
+			path = "res/tileset/Tilemap_color1.png"
+		}
 		png_data, png_err := os.read_entire_file_from_path(path, context.temp_allocator)
 		if png_err != nil {
-			if is_optional_biome_tile_sprite(img_name) {
+			if is_optional_terrain_sprite(img_name) {
 				continue
 			}
 			assert(false, fmt.tprint(path, "not found"))

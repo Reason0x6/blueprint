@@ -109,13 +109,6 @@ VEG_MIN_DIST_TREE: f32 : 22
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
 
-Biome_Kind :: enum u8 {
-	desert,
-	plains,
-	forest,
-	ruins,
-}
-
 Item_Kind :: enum u8 {
 	nil,
 	wood,
@@ -1104,7 +1097,7 @@ game_draw :: proc() {
 	// world
 	{
 		push_coord_space(get_world_space())
-		draw_world_biome_tiles()
+		draw_world_terrain_tiles()
 		if ctx.gs.debug_show_grid {
 			draw_world_grid()
 		}
@@ -1222,62 +1215,27 @@ floor_div_int :: proc(v: int, d: int) -> int {
 	return q
 }
 
-get_biome_for_chunk :: proc(chunk_x: int, chunk_y: int) -> Biome_Kind {
-	seed := u64(i64(chunk_x)*1103515245 + i64(chunk_y)*214013 + 2531011)
-	seed = seed ~ 0x9E3779B97F4A7C15
-	r := random01_from_seed(seed)
-	if r < 0.25 do return .desert
-	if r < 0.50 do return .plains
-	if r < 0.75 do return .forest
-	return .ruins
-}
-
 sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
 	size := get_sprite_size(sprite)
 	return size.x > 0 && size.y > 0
-}
-
-pick_loaded_variant :: proc(seed: u64, variants: []Sprite_Name) -> Sprite_Name {
-	available := make([dynamic]Sprite_Name, 0, len(variants), allocator=context.temp_allocator)
-	for s in variants {
-		if sprite_is_loaded(s) {
-			append(&available, s)
-		}
-	}
-	if len(available) == 0 {
-		return .nil
-	}
-
-	r := random01_from_seed(seed)
-	idx := clamp(int(r * f32(len(available))), 0, len(available)-1)
-	return available[idx]
-}
-
-biome_base_tile_sprite :: proc(biome: Biome_Kind, tile_x: int, tile_y: int) -> Sprite_Name {
-	seed := u64(i64(tile_x)*92837111 + i64(tile_y)*689287499)
-	seed = seed ~ 0xC2B2AE3D27D4EB4F
-
-	#partial switch biome {
-	case .desert:
-		return pick_loaded_variant(seed, []Sprite_Name{.desert_bg_tile, .bg_repeat_tex0})
-	case .plains:
-		return pick_loaded_variant(seed, []Sprite_Name{.plains_bg_tile, .bg_repeat_tex0})
-	case .forest:
-		return pick_loaded_variant(seed, []Sprite_Name{.forest_bg_tile, .forest_grass_texture, .bg_repeat_tex0})
-	case .ruins:
-		return pick_loaded_variant(seed, []Sprite_Name{.ruins_bg_tile, .bg_repeat_tex0})
-	}
-	return .nil
 }
 
 TERRAIN_TILESET_CELL_PX :: 32
 TERRAIN_TILESET_COL0 :: 9
 TERRAIN_TILESET_ROW0 :: 0
 
-get_biome_for_tile :: proc(tile_x: int, tile_y: int) -> Biome_Kind {
-	chunk_x := floor_div_int(tile_x, BIOME_CHUNK_SIZE_TILES)
-	chunk_y := floor_div_int(tile_y, BIOME_CHUNK_SIZE_TILES)
-	return get_biome_for_chunk(chunk_x, chunk_y)
+terrain_noise01 :: proc(tile_x: int, tile_y: int, salt: u64) -> f32 {
+	seed := u64(i64(tile_x)*73856093 + i64(tile_y)*19349663) ~ salt
+	return random01_from_seed(seed)
+}
+
+is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
+	coarse_x := floor_div_int(tile_x, 6)
+	coarse_y := floor_div_int(tile_y, 6)
+	coarse := terrain_noise01(coarse_x, coarse_y, 0xA53C9E12)
+	fine := terrain_noise01(tile_x, tile_y, 0x41C64E6D)
+	value := coarse*0.7 + fine*0.3
+	return value > 0.47
 }
 
 draw_tileset_cell_in_world_rect :: proc(sprite: Sprite_Name, cell_x: int, cell_y: int, world_rect: shape.Rect, col:=color.WHITE) {
@@ -1298,18 +1256,18 @@ draw_tileset_cell_in_world_rect :: proc(sprite: Sprite_Name, cell_x: int, cell_y
 	draw_rect(world_rect, sprite=sprite, uv=Vec4{u0, v0, u1, v1}, col=col)
 }
 
-pick_plains_autotile_cell :: proc(tile_x: int, tile_y: int) -> (cx: int, cy: int, ok: bool) {
+pick_terrain_autotile_cell :: proc(tile_x: int, tile_y: int) -> (cx: int, cy: int, ok: bool) {
 	if !sprite_is_loaded(.tilemap_color1) {
 		return 0, 0, false
 	}
-	if get_biome_for_tile(tile_x, tile_y) != .plains {
+	if !is_terrain_solid_tile(tile_x, tile_y) {
 		return 0, 0, false
 	}
 
-	n := get_biome_for_tile(tile_x, tile_y+1) == .plains
-	s := get_biome_for_tile(tile_x, tile_y-1) == .plains
-	w := get_biome_for_tile(tile_x-1, tile_y) == .plains
-	e := get_biome_for_tile(tile_x+1, tile_y) == .plains
+	n := is_terrain_solid_tile(tile_x, tile_y+1)
+	s := is_terrain_solid_tile(tile_x, tile_y-1)
+	w := is_terrain_solid_tile(tile_x-1, tile_y)
+	e := is_terrain_solid_tile(tile_x+1, tile_y)
 
 	if !n && !s && !w && !e do return TERRAIN_TILESET_COL0 + 4, TERRAIN_TILESET_ROW0 + 5, true
 	if !n && !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 0, true
@@ -1321,20 +1279,6 @@ pick_plains_autotile_cell :: proc(tile_x: int, tile_y: int) -> (cx: int, cy: int
 	if !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 1, true
 	if !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 1, true
 	return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 1, true
-}
-
-biome_fallback_col :: proc(biome: Biome_Kind) -> Vec4 {
-	#partial switch biome {
-	case .desert:
-		return Vec4{0.73, 0.66, 0.42, 1.0}
-	case .plains:
-		return Vec4{0.37, 0.56, 0.31, 1.0}
-	case .forest:
-		return Vec4{0.21, 0.38, 0.24, 1.0}
-	case .ruins:
-		return Vec4{0.38, 0.39, 0.42, 1.0}
-	}
-	return Vec4{0.4, 0.4, 0.4, 1.0}
 }
 
 make_chunk_key :: proc(chunk_x: int, chunk_y: int) -> u64 {
@@ -1398,6 +1342,9 @@ spawn_grass_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 		rx := random01_from_seed(base_seed ~ 0x27D4EB2D)
 		ry := random01_from_seed(base_seed ~ 0x85EBCA77)
 		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
+		tile_x := int(math.floor(pos.x / tile_size.x))
+		tile_y := int(math.floor(pos.y / tile_size.y))
+		if !is_terrain_solid_tile(tile_x, tile_y) do continue
 
 		if try_spawn_world_entity(.grass_ent, pos, VEG_MIN_DIST_GRASS) {
 			spawned += 1
@@ -1405,11 +1352,7 @@ spawn_grass_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	}
 }
 
-spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2, biome: Biome_Kind) {
-	if biome != .plains && biome != .forest {
-		return
-	}
-
+spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
 	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
 
@@ -1422,6 +1365,9 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2, biome
 		ry := random01_from_seed(base_seed ~ 0x7F4A7C15)
 		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
 		pos = snap_vec2_to_grid(pos, ENTITY_GRID_SIZE)
+		tile_x := int(math.floor(pos.x / tile_size.x))
+		tile_y := int(math.floor(pos.y / tile_size.y))
+		if !is_terrain_solid_tile(tile_x, tile_y) do continue
 
 		if try_spawn_world_entity(.tree_ent, pos, VEG_MIN_DIST_TREE) {
 			spawned += 1
@@ -1435,9 +1381,8 @@ spawn_vegetation_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	}
 	mark_vegetation_chunk_spawned(chunk_x, chunk_y)
 
-	biome := get_biome_for_chunk(chunk_x, chunk_y)
 	spawn_grass_for_chunk(chunk_x, chunk_y, tile_size)
-	spawn_trees_for_chunk(chunk_x, chunk_y, tile_size, biome)
+	spawn_trees_for_chunk(chunk_x, chunk_y, tile_size)
 }
 
 spawn_vegetation_near_player_chunks :: proc() {
@@ -1493,7 +1438,7 @@ draw_placeable_range_circle :: proc() {
 	}
 }
 
-draw_world_biome_tiles :: proc() {
+draw_world_terrain_tiles :: proc() {
 	tile_size := Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}
 
 	center := ctx.gs.cam_pos
@@ -1509,18 +1454,11 @@ draw_world_biome_tiles :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			biome := get_biome_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
+			draw_rect(tile_rect, col=Vec4{0.12, 0.19, 0.12, 1.0})
 
-			biome_sprite := biome_base_tile_sprite(biome, tx, ty)
-			if biome_sprite != .nil {
-				draw_sprite_in_rect(biome_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
-			} else {
-				draw_rect(tile_rect, col=biome_fallback_col(biome))
-			}
-
-			cell_x, cell_y, has_cell := pick_plains_autotile_cell(tx, ty)
+			cell_x, cell_y, has_cell := pick_terrain_autotile_cell(tx, ty)
 			if has_cell {
 				draw_tileset_cell_in_world_rect(.tilemap_color1, cell_x, cell_y, tile_rect, col=Vec4{1, 1, 1, 0.9})
 			}

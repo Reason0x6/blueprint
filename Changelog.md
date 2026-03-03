@@ -22,6 +22,9 @@
 - Reworked biome background selection to stop using `Plains_0..4` and instead mix base biome textures procedurally from a smaller shared texture set per biome.
 - Added Plains autotile terrain rendering from `tilemap_color1.png` using neighbor-mask tile selection (edges/corners/center) to reduce visible repetition.
 - Added `res/images/tilemap_color1.png` import path support (optional sprite load) and UV cell slicing (`32px` cells) for drawing autotile cells into world grid tiles.
+- Removed biome-driven terrain selection in favor of a single procedural terrain-mask generator for basic world generation.
+- Terrain rendering now uses only `res/tileset/Tilemap_color1.png` (loaded via `tilemap_color1` sprite override path) with neighbor-based autotile edge/corner/center selection.
+- Grass and tree chunk spawns now use the same terrain mask check (instead of biome checks), so vegetation populates generated land tiles consistently.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
