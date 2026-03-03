@@ -81,6 +81,7 @@ ITEM_DROP_BOUNCE_SPEED: f32 : 95
 ITEM_DROP_BOUNCE_DRAG: f32 : 6.5
 ITEM_DROP_PICKUP_DELAY_SEC: f64 : 0.25
 HIT_FLASH_DURATION_SEC: f32 : 0.12
+HIT_DROP_MAX_FROM_EDGE: f32 : 40
 
 Item_Kind :: enum u8 {
 	nil,
@@ -2056,6 +2057,33 @@ spawn_item_pickup_towards_player :: proc(item: Item_Kind, count: int, pos: Vec2)
 	return e
 }
 
+compute_hit_drop_spawn_pos :: proc(target: ^Entity) -> Vec2 {
+	base := target.pos + Vec2{0, 8}
+	player := get_player()
+	if !is_valid(player^) {
+		return base
+	}
+
+	mid := (player.pos + target.pos) * 0.5
+	hitbox, ok := get_entity_hitbox_rect(target^)
+	if !ok {
+		return mid
+	}
+
+	edge := Vec2{
+		math.clamp(player.pos.x, hitbox.x, hitbox.z),
+		math.clamp(player.pos.y, hitbox.y, hitbox.w),
+	}
+
+	offset := mid - edge
+	dist := linalg.length(offset)
+	if dist > HIT_DROP_MAX_FROM_EDGE && dist > 0.0001 {
+		offset *= HIT_DROP_MAX_FROM_EDGE / dist
+	}
+
+	return edge + offset
+}
+
 spawn_movement_indicator :: proc(pos: Vec2) -> ^Entity {
 	e := entity_create(.movement_indicator_fx)
 	e.pos = pos
@@ -2086,7 +2114,7 @@ entity_on_hit_noop :: proc(_: ^Entity, _: ^Entity) {}
 
 entity_on_hit_tree :: proc(target: ^Entity, _: ^Entity) {
 	if roll_chance(TREE_WOOD_HIT_DROP_CHANCE, u64(target.handle.id)) {
-		spawn_item_pickup_towards_player(.wood, 1, target.pos + Vec2{0, 8})
+		spawn_item_pickup_towards_player(.wood, 1, compute_hit_drop_spawn_pos(target))
 	}
 }
 
@@ -2147,7 +2175,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	}
 
 	if target.break_drop_item != .nil && target.break_drop_count > 0 {
-		spawn_item_pickup_towards_player(target.break_drop_item, target.break_drop_count, target.pos + Vec2{0, 8})
+		spawn_item_pickup_towards_player(target.break_drop_item, target.break_drop_count, compute_hit_drop_spawn_pos(target))
 	}
 	entity_destroy(target)
 }

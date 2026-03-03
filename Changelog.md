@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Add item-based hit cooldown UI/hold gating and white hit flash outline
+## [HEAD] Move hit-drop spawns closer to player with hitbox-edge clamp
+- Hit-triggered drops now spawn halfway between player and entity, then clamp to a maximum of `40px` from the closest point on the entity hitbox edge.
+- Updated tree on-hit wood drops and durability break drops to use the new midpoint + edge-clamp spawn position before bounce motion.
+
+## [1ecaca1] Add item-based hit cooldown UI/hold gating and white hit flash outline
 - Added item-based hit cooldown attributes via `item_hit_cooldown`, and now left-click usage starts cooldown from the currently equipped item.
 - Holding left mouse now only applies repeat hits when cooldown is finished, instead of using a fixed repeat timer.
 - Added a world-space cooldown bar under the player showing remaining hit cooldown after click/use.
