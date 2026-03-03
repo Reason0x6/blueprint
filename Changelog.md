@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Switch inventory interaction to held-item click placement
+## [HEAD] Merge same-item stacks on left-click placement
+- Updated held-item left-click placement so clicking a slot with the same item now merges into that slot instead of swapping.
+- Merge respects max stack size and keeps any overflow in the held stack.
+- Preserves existing left-click swap behavior for different item types.
+
+## [5c8b947] Switch inventory interaction to held-item click placement
 - Changed inventory/crafting interaction to click-to-hold semantics instead of drag-release semantics.
 - Left click on a slot now places the held stack and swaps with any existing stack in that slot.
 - Right click on a slot now places exactly one held item when the slot is empty or has the same item.

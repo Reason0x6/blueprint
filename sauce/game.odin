@@ -1653,6 +1653,21 @@ place_held_stack_swap :: proc(inv: ^Inventory_State, dst: ^Inventory_Slot) -> bo
 	if !inv.dragging || inv.drag_slot.item == .nil || inv.drag_slot.count <= 0 {
 		return false
 	}
+
+	if dst.item == inv.drag_slot.item {
+		max_stack := item_max_stack(dst.item)
+		if max_stack > 0 {
+			free := max(0, max_stack-dst.count)
+			to_add := min(free, inv.drag_slot.count)
+			dst.count += to_add
+			inv.drag_slot.count -= to_add
+			if inv.drag_slot.count <= 0 {
+				clear_inventory_drag(inv)
+			}
+			return to_add > 0
+		}
+	}
+
 	tmp := dst^
 	dst^ = inv.drag_slot
 	inv.drag_slot = tmp
