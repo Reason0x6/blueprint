@@ -1220,65 +1220,45 @@ sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
 	return size.x > 0 && size.y > 0
 }
 
-TERRAIN_TILESET_CELL_PX :: 32
-TERRAIN_TILESET_COL0 :: 9
-TERRAIN_TILESET_ROW0 :: 0
+TERRAIN_TILESET_BLOCK_PX :: 64
+TERRAIN_TILESET_BLOCKS_PER_ROW :: 9
+TERRAIN_DEFAULT_BLOCK_INDEX :: 11
+TERRAIN_MAX_BLOCK_INDEX :: 54
 
-terrain_noise01 :: proc(tile_x: int, tile_y: int, salt: u64) -> f32 {
-	seed := u64(i64(tile_x)*73856093 + i64(tile_y)*19349663) ~ salt
-	return random01_from_seed(seed)
+terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {
+	_ = tile_x
+	_ = tile_y
+	// Default terrain fill. Replace this selector when you want rules for other blocks.
+	return TERRAIN_DEFAULT_BLOCK_INDEX
 }
 
 is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
-	coarse_x := floor_div_int(tile_x, 6)
-	coarse_y := floor_div_int(tile_y, 6)
-	coarse := terrain_noise01(coarse_x, coarse_y, 0xA53C9E12)
-	fine := terrain_noise01(tile_x, tile_y, 0x41C64E6D)
-	value := coarse*0.7 + fine*0.3
-	return value > 0.47
+	return terrain_block_index_for_tile(tile_x, tile_y) > 0
 }
 
-draw_tileset_cell_in_world_rect :: proc(sprite: Sprite_Name, cell_x: int, cell_y: int, world_rect: shape.Rect, col:=color.WHITE) {
+draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, world_rect: shape.Rect, col:=color.WHITE) {
 	size := get_sprite_size(sprite)
 	if size.x <= 0 || size.y <= 0 {
 		return
 	}
+	if block_index < 1 || block_index > TERRAIN_MAX_BLOCK_INDEX {
+		return
+	}
+
+	cell := block_index - 1
+	cell_x := cell % TERRAIN_TILESET_BLOCKS_PER_ROW
+	cell_y := cell / TERRAIN_TILESET_BLOCKS_PER_ROW
 
 	base_uv := atlas_uv_from_sprite(sprite)
 	uv_w := base_uv.z - base_uv.x
 	uv_h := base_uv.w - base_uv.y
 
-	u0 := base_uv.x + (f32(cell_x*TERRAIN_TILESET_CELL_PX)/size.x) * uv_w
-	v0 := base_uv.y + (f32(cell_y*TERRAIN_TILESET_CELL_PX)/size.y) * uv_h
-	u1 := base_uv.x + (f32((cell_x+1)*TERRAIN_TILESET_CELL_PX)/size.x) * uv_w
-	v1 := base_uv.y + (f32((cell_y+1)*TERRAIN_TILESET_CELL_PX)/size.y) * uv_h
+	u0 := base_uv.x + (f32(cell_x*TERRAIN_TILESET_BLOCK_PX)/size.x) * uv_w
+	v0 := base_uv.y + (f32(cell_y*TERRAIN_TILESET_BLOCK_PX)/size.y) * uv_h
+	u1 := base_uv.x + (f32((cell_x+1)*TERRAIN_TILESET_BLOCK_PX)/size.x) * uv_w
+	v1 := base_uv.y + (f32((cell_y+1)*TERRAIN_TILESET_BLOCK_PX)/size.y) * uv_h
 
 	draw_rect(world_rect, sprite=sprite, uv=Vec4{u0, v0, u1, v1}, col=col)
-}
-
-pick_terrain_autotile_cell :: proc(tile_x: int, tile_y: int) -> (cx: int, cy: int, ok: bool) {
-	if !sprite_is_loaded(.tilemap_color1) {
-		return 0, 0, false
-	}
-	if !is_terrain_solid_tile(tile_x, tile_y) {
-		return 0, 0, false
-	}
-
-	n := is_terrain_solid_tile(tile_x, tile_y+1)
-	s := is_terrain_solid_tile(tile_x, tile_y-1)
-	w := is_terrain_solid_tile(tile_x-1, tile_y)
-	e := is_terrain_solid_tile(tile_x+1, tile_y)
-
-	if !n && !s && !w && !e do return TERRAIN_TILESET_COL0 + 4, TERRAIN_TILESET_ROW0 + 5, true
-	if !n && !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 0, true
-	if !n && !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 0, true
-	if !s && !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 3, true
-	if !s && !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 3, true
-	if !n do return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 0, true
-	if !s do return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 3, true
-	if !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 1, true
-	if !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 1, true
-	return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 1, true
 }
 
 make_chunk_key :: proc(chunk_x: int, chunk_y: int) -> u64 {
@@ -1454,13 +1434,13 @@ draw_world_terrain_tiles :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
+			block_index := terrain_block_index_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
 			draw_rect(tile_rect, col=Vec4{0.12, 0.19, 0.12, 1.0})
 
-			cell_x, cell_y, has_cell := pick_terrain_autotile_cell(tx, ty)
-			if has_cell {
-				draw_tileset_cell_in_world_rect(.tilemap_color1, cell_x, cell_y, tile_rect, col=Vec4{1, 1, 1, 0.9})
+			if sprite_is_loaded(.tilemap_color1) {
+				draw_tileset_block_in_world_rect(.tilemap_color1, block_index, tile_rect, col=Vec4{1, 1, 1, 0.95})
 			}
 			tx += 1
 		}

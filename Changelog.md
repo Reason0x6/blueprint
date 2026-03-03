@@ -25,6 +25,8 @@
 - Removed biome-driven terrain selection in favor of a single procedural terrain-mask generator for basic world generation.
 - Terrain rendering now uses only `res/tileset/Tilemap_color1.png` (loaded via `tilemap_color1` sprite override path) with neighbor-based autotile edge/corner/center selection.
 - Grass and tree chunk spawns now use the same terrain mask check (instead of biome checks), so vegetation populates generated land tiles consistently.
+- Terrain tileset sampling now uses `64x64` block indices (`1..54`) from `Tilemap_color1`, with a dedicated `terrain_block_index_for_tile` selector hook for future per-tile block rules.
+- Default terrain generation currently fills with block `11` (flat ground), as requested, while keeping the block-selector path ready for later edge/water block mapping.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
