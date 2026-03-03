@@ -96,6 +96,7 @@ LOW_DURABILITY_FLASH_THRESHOLD :: 3
 LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 FOREST_GRASS_TILE_CHANCE: f32 : 1.0/3.0
+PLAYER_MOVE_SPEED: f32 : 112.0
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
@@ -1207,7 +1208,7 @@ draw_world_forest_grass_tiles :: proc() {
 		for tx <= max_tile_x {
 			if is_forest_grass_tile(tx, ty) {
 				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
-				draw_sprite(tile_center, .forest_grass_texture, pivot=.center_center, z_layer=.background)
+				draw_sprite(tile_center, .forest_grass_texture, pivot=.center_center)
 			}
 			tx += 1
 		}
@@ -3093,7 +3094,7 @@ setup_player :: proc(e: ^Entity) {
 				e.pending_interact = {}
 				e.has_pending_place = false
 				e.pending_place_item = .nil
-				e.pos += move_dir * 100.0 * ctx.delta_t
+				e.pos += move_dir * PLAYER_MOVE_SPEED * ctx.delta_t
 			} else if e.has_move_target {
 				to_target := e.move_target - e.pos
 				dist_sq := to_target.x*to_target.x + to_target.y*to_target.y
@@ -3111,7 +3112,7 @@ setup_player :: proc(e: ^Entity) {
 				} else {
 					dist := math.sqrt(dist_sq)
 					move_dir = to_target / dist
-					move_step := move_dir * 100.0 * ctx.delta_t
+					move_step := move_dir * PLAYER_MOVE_SPEED * ctx.delta_t
 					step_len := linalg.length(move_step)
 					if step_len > dist {
 						e.pos = e.move_target
