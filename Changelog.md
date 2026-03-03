@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Scale tree wood drop chance by held-item durability multiplier
+## [HEAD] Merge crafting output into matching held stack on left click
+- Left-clicking crafting output while already holding the same item now consumes ingredients and adds crafted output directly into the held stack.
+- Merge path respects max stack capacity and only crafts when the full output stack can fit.
+
+## [14d5c09] Scale tree wood drop chance by held-item durability multiplier
 - Updated tree `on_hit` drop logic to multiply `TREE_WOOD_HIT_DROP_CHANCE` by the hitter's `item_hit_durability_multiplier`.
 - Tree wood drop chance now scales with equipped item effectiveness (including zero-chance items).
 

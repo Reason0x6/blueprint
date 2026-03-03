@@ -2020,7 +2020,14 @@ draw_inventory_ui :: proc() {
 
 		// Claim crafting output first.
 		if is_crafting_output_hovered(inv, mouse_pos) && inv.crafting_output.item != .nil && inv.crafting_output.count > 0 {
-			if !inv.dragging && try_consume_crafting_ingredients_for_output(inv, inv.crafting_output) {
+			if inv.dragging && inv.drag_slot.item == inv.crafting_output.item {
+				max_stack := item_max_stack(inv.drag_slot.item)
+				free := max(0, max_stack-inv.drag_slot.count)
+				if free >= inv.crafting_output.count && try_consume_crafting_ingredients_for_output(inv, inv.crafting_output) {
+					inv.drag_slot.count += inv.crafting_output.count
+					update_crafting_output(inv)
+				}
+			} else if !inv.dragging && try_consume_crafting_ingredients_for_output(inv, inv.crafting_output) {
 				inv.dragging = true
 				inv.drag_from_slot = -1
 				inv.drag_from_kind = .craft_output
