@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Make debug code output compact and selectable
+## [HEAD] Remove shift-right-click box editor/debug UI
+- Removed the shift-right-click entity box editor workflow and all related debug panel UI.
+- Removed live hitbox/overlap override paths and restored `get_entity_hitbox_rect` / `get_entity_overlap_rect` to code-defined behavior only.
+- Restored normal right-click movement handling without the editor-selection branch.
+
+## [255c5ab] Make debug code output compact and selectable
 - Replaced long full-line code text in the debug editor with compact selectable rows for hitbox and overlap code.
 - Added click-to-select + click-to-copy behavior for each code row using system clipboard integration.
 - Added selection status text and kept the panel compact while preserving generated code snippets.

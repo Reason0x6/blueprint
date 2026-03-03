@@ -20,7 +20,6 @@ import "core:math/linalg"
 import "core:os"
 import "core:strings"
 
-import sapp "sokol/app"
 import spall "core:prof/spall"
 
 VERSION :string: "v0.0.0"
@@ -56,28 +55,11 @@ Game_State :: struct {
 	player_handle: Entity_Handle,
 	debug_show_hitboxes: bool,
 	debug_show_overlap_boxes: bool,
-	debug_box_editor: Debug_Box_Editor,
 	inventory: Inventory_State,
 
 	scratch: struct {
 		all_entities: []Entity_Handle,
 	}
-}
-
-Debug_Box_Editor :: struct {
-	active: bool,
-	selected: Entity_Handle,
-	selected_code: Debug_Code_Kind,
-	hitbox_offset: Vec2,
-	hitbox_size: Vec2,
-	overlap_offset: Vec2,
-	overlap_size: Vec2,
-}
-
-Debug_Code_Kind :: enum u8 {
-	none,
-	hitbox,
-	overlap,
 }
 
 INVENTORY_SLOT_COUNT :: 12
@@ -584,7 +566,6 @@ app_frame :: proc() {
 		draw_text(overlap_button_pos + Vec2{2, -2}, overlap_button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
 
 		draw_inventory_ui()
-		draw_debug_box_editor_ui()
 	}
 
 	sound_play_continuously("event:/ambiance", "")
@@ -594,157 +575,6 @@ app_frame :: proc() {
 
 	volume :f32= 0.75
 	sound_update(get_player().pos, volume)
-}
-
-is_shift_down :: proc() -> bool {
-	return key_down(.LEFT_SHIFT) || key_down(.RIGHT_SHIFT)
-}
-
-get_debug_editor_selected_entity :: proc() -> (^Entity, bool) {
-	if !ctx.gs.debug_box_editor.active {
-		return nil, false
-	}
-	e, ok := entity_from_handle(ctx.gs.debug_box_editor.selected)
-	if !ok || !is_valid(e^) {
-		return nil, false
-	}
-	return e, true
-}
-
-is_debug_editor_selected_entity :: proc(e: Entity) -> bool {
-	if !ctx.gs.debug_box_editor.active {
-		return false
-	}
-	return e.handle.id == ctx.gs.debug_box_editor.selected.id
-}
-
-set_debug_box_editor_selection :: proc(e: ^Entity) {
-	if !is_valid(e^) {
-		ctx.gs.debug_box_editor = {}
-		return
-	}
-
-	ctx.gs.debug_box_editor.active = true
-	ctx.gs.debug_box_editor.selected = e.handle
-	ctx.gs.debug_box_editor.selected_code = .none
-
-	hitbox, hit_ok := get_entity_hitbox_rect(e^)
-	if hit_ok {
-		center := (hitbox.xy + hitbox.zw) * 0.5
-		ctx.gs.debug_box_editor.hitbox_size = shape.rect_size(hitbox)
-		ctx.gs.debug_box_editor.hitbox_offset = center - e.pos
-	}
-
-	overlap, ov_ok := get_entity_overlap_rect(e^)
-	if ov_ok {
-		center := (overlap.xy + overlap.zw) * 0.5
-		ctx.gs.debug_box_editor.overlap_size = shape.rect_size(overlap)
-		ctx.gs.debug_box_editor.overlap_offset = center - e.pos
-	}
-}
-
-draw_selectable_code_row :: proc(rect: shape.Rect, label: string, code: string, selected: bool) -> bool {
-	hover, pressed := raw_button(rect)
-
-	col := Vec4{0.08, 0.08, 0.08, 0.86}
-	if hover {
-		col = Vec4{0.14, 0.14, 0.14, 0.9}
-	}
-	if selected {
-		col = Vec4{0.16, 0.24, 0.12, 0.92}
-	}
-	draw_rect(rect, col=col, outline_col=Vec4{1, 1, 1, 0.2}, z_layer=.ui)
-
-	short := code
-	if len(short) > 44 {
-		short = fmt.tprintf("%s...", short[:44])
-	}
-	draw_text(rect.xy + Vec2{2, -1}, fmt.tprintf("%s: %s", label, short), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.82}, drop_shadow_col=Vec4{})
-	return pressed
-}
-
-box_editor_step_button :: proc(pos: Vec2, label: string, value: ^f32, step: f32) {
-	draw_text(pos, label, pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{})
-
-	minus_rect := shape.rect_make(pos + Vec2{74, 0}, Vec2{12, 10}, pivot=.top_left)
-	plus_rect := shape.rect_make(pos + Vec2{128, 0}, Vec2{12, 10}, pivot=.top_left)
-
-	minus_hover := shape.rect_contains(minus_rect, mouse_pos_in_current_space())
-	plus_hover := shape.rect_contains(plus_rect, mouse_pos_in_current_space())
-	minus_pressed := minus_hover && key_pressed(.LEFT_MOUSE)
-	plus_pressed := plus_hover && key_pressed(.LEFT_MOUSE)
-	if minus_pressed {
-		value^ -= step
-	}
-	if plus_pressed {
-		value^ += step
-	}
-
-	if key_down(.LEFT_MOUSE) {
-		repeat_step := step * 7.5 * ctx.delta_t
-		if minus_hover {
-			value^ -= repeat_step
-		}
-		if plus_hover {
-			value^ += repeat_step
-		}
-	}
-
-	draw_rect(minus_rect, col=minus_hover ? Vec4{0.25, 0.25, 0.25, 0.85} : Vec4{0.12, 0.12, 0.12, 0.82}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
-	draw_rect(plus_rect, col=plus_hover ? Vec4{0.25, 0.25, 0.25, 0.85} : Vec4{0.12, 0.12, 0.12, 0.82}, outline_col=Vec4{1, 1, 1, 0.25}, z_layer=.ui)
-	draw_text(minus_rect.xy + Vec2{4, -1}, "-", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
-	draw_text(plus_rect.xy + Vec2{4, -1}, "+", pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
-	draw_text(pos + Vec2{90, 0}, fmt.tprintf("%.1f", value^), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{})
-}
-
-draw_debug_box_editor_ui :: proc() {
-	e, ok := get_debug_editor_selected_entity()
-	if !ok {
-		return
-	}
-
-	_, top := screen_pivot(.top_left)
-	p := shape.rect_make(Vec2{6, top-6}, Vec2{186, 120}, pivot=.top_left)
-	draw_rect(p, col=Vec4{0.03, 0.03, 0.03, 0.92}, outline_col=Vec4{0.9, 0.9, 0.9, 0.3}, z_layer=.ui)
-	draw_text(p.xy + Vec2{4, -2}, fmt.tprintf("Box Editor: %v", e.kind), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
-
-	step: f32 = 1
-	if is_shift_down() {
-		step = 2
-	}
-	draw_text(p.xy + Vec2{4, -14}, fmt.tprintf("Step: %.1f (hold Shift for 2x)", step), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.6}, drop_shadow_col=Vec4{})
-
-	box_editor_step_button(p.xy + Vec2{4, -26}, "Hit X", &ctx.gs.debug_box_editor.hitbox_offset.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -36}, "Hit Y", &ctx.gs.debug_box_editor.hitbox_offset.y, step)
-	box_editor_step_button(p.xy + Vec2{4, -46}, "Hit W", &ctx.gs.debug_box_editor.hitbox_size.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -56}, "Hit H", &ctx.gs.debug_box_editor.hitbox_size.y, step)
-	box_editor_step_button(p.xy + Vec2{4, -68}, "Ov X", &ctx.gs.debug_box_editor.overlap_offset.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -78}, "Ov Y", &ctx.gs.debug_box_editor.overlap_offset.y, step)
-	box_editor_step_button(p.xy + Vec2{4, -88}, "Ov W", &ctx.gs.debug_box_editor.overlap_size.x, step)
-	box_editor_step_button(p.xy + Vec2{4, -98}, "Ov H", &ctx.gs.debug_box_editor.overlap_size.y, step)
-
-	hit_code := fmt.tprintf("HITBOX code: case .%v: return shape.rect_make(e.pos + Vec2{%.1f, %.1f}, Vec2{%.1f, %.1f}, pivot=.center_center), true", e.kind, ctx.gs.debug_box_editor.hitbox_offset.x, ctx.gs.debug_box_editor.hitbox_offset.y, max(1.0, ctx.gs.debug_box_editor.hitbox_size.x), max(1.0, ctx.gs.debug_box_editor.hitbox_size.y))
-	ov_code := fmt.tprintf("OVERLAP code: .%v = {overlap_box_size=Vec2{%.1f, %.1f}, overlap_box_offset=Vec2{%.1f, %.1f}, overlap_box_pivot=.center_center}", e.sprite, max(1.0, ctx.gs.debug_box_editor.overlap_size.x), max(1.0, ctx.gs.debug_box_editor.overlap_size.y), ctx.gs.debug_box_editor.overlap_offset.x, ctx.gs.debug_box_editor.overlap_offset.y)
-
-	hit_row := shape.rect_make(p.xy + Vec2{4, -108}, Vec2{176, 9}, pivot=.top_left)
-	ov_row := shape.rect_make(p.xy + Vec2{4, -118}, Vec2{176, 9}, pivot=.top_left)
-
-	if draw_selectable_code_row(hit_row, "Hitbox", hit_code, ctx.gs.debug_box_editor.selected_code == .hitbox) {
-		ctx.gs.debug_box_editor.selected_code = .hitbox
-		sapp.set_clipboard_string(strings.clone_to_cstring(hit_code, allocator=context.temp_allocator))
-	}
-	if draw_selectable_code_row(ov_row, "Overlap", ov_code, ctx.gs.debug_box_editor.selected_code == .overlap) {
-		ctx.gs.debug_box_editor.selected_code = .overlap
-		sapp.set_clipboard_string(strings.clone_to_cstring(ov_code, allocator=context.temp_allocator))
-	}
-
-	status := "Click row to select + copy"
-	if ctx.gs.debug_box_editor.selected_code == .hitbox {
-		status = "Selected: Hitbox"
-	} else if ctx.gs.debug_box_editor.selected_code == .overlap {
-		status = "Selected: Overlap"
-	}
-	draw_text(p.xy + Vec2{4, -129}, status, pivot=.top_left, z_layer=.ui, col=Vec4{0.85, 0.95, 1, 0.7}, drop_shadow_col=Vec4{})
 }
 
 app_shutdown :: proc() {
@@ -804,26 +634,17 @@ game_update :: proc() {
 		if is_valid(player^) {
 			target := mouse_pos_in_current_space()
 
-			if is_shift_down() {
-				clicked_entity, clicked_entity_ok := find_entity_at_world_pos(target)
-				if clicked_entity_ok {
-					set_debug_box_editor_selection(clicked_entity)
-				} else {
-					ctx.gs.debug_box_editor = {}
-				}
-			} else {
-				clicked_entity, clicked_entity_ok := find_entity_at_world_pos(target)
-				if clicked_entity_ok {
-					set_player_move_target_with_detour(player, clicked_entity.pos)
-					player.pending_interact = clicked_entity.handle
-					player.has_pending_interact = true
-					spawn_movement_indicator(target)
-				} else if !is_world_position_blocked_for_player(target) {
-					set_player_move_target_with_detour(player, target)
-					player.has_pending_interact = false
-					player.pending_interact = {}
-					spawn_movement_indicator(target)
-				}
+			clicked_entity, clicked_entity_ok := find_entity_at_world_pos(target)
+			if clicked_entity_ok {
+				set_player_move_target_with_detour(player, clicked_entity.pos)
+				player.pending_interact = clicked_entity.handle
+				player.has_pending_interact = true
+				spawn_movement_indicator(target)
+			} else if !is_world_position_blocked_for_player(target) {
+				set_player_move_target_with_detour(player, target)
+				player.has_pending_interact = false
+				player.pending_interact = {}
+				spawn_movement_indicator(target)
 			}
  		}
 	}
@@ -990,13 +811,6 @@ get_entity_overlap_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #opti
 		return {}, false
 	}
 
-	if is_debug_editor_selected_entity(e) {
-		s := ctx.gs.debug_box_editor.overlap_size
-		s.x = max(1.0, s.x)
-		s.y = max(1.0, s.y)
-		return shape.rect_make(e.pos + ctx.gs.debug_box_editor.overlap_offset, s, pivot=.center_center), true
-	}
-
 	#partial switch e.kind {
 	case .oblisk_ent:
 		size := get_sprite_size(e.sprite)
@@ -1025,13 +839,6 @@ get_entity_sprite_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 }
 
 get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optional_ok {
-	if is_debug_editor_selected_entity(e) {
-		s := ctx.gs.debug_box_editor.hitbox_size
-		s.x = max(1.0, s.x)
-		s.y = max(1.0, s.y)
-		return shape.rect_make(e.pos + ctx.gs.debug_box_editor.hitbox_offset, s, pivot=.center_center), true
-	}
-
 	#partial switch e.kind {
 	case .player:
 		// Keep player collision on the feet/body and not full sprite bounds.
