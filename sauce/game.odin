@@ -1671,13 +1671,20 @@ draw_world_terrain_tiles :: proc() {
 			tile := terrain_tile_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
-			draw_rect(tile_rect, col=Vec4{0.12, 0.19, 0.12, 1.0})
-
-			if tile.kind == .water {
+			// Water underlay for non-water tiles so transparent pixels reveal water below.
+			if tile.kind != .water {
 				if sprite_is_loaded(.water) {
 					draw_sprite_in_rect(.water, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
 				} else {
 					draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
+				}
+			} else {
+				draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
+			}
+
+			if tile.kind == .water {
+				if sprite_is_loaded(.water) {
+					draw_sprite_in_rect(.water, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
 				}
 			} else if tile.kind == .block {
 				if sprite_is_loaded(.tilemap_color1) {
