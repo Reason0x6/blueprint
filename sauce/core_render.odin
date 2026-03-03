@@ -207,7 +207,7 @@ sprites: [Sprite_Name]Sprite
 
 is_optional_biome_tile_sprite :: proc(img_name: Sprite_Name) -> bool {
 	#partial switch img_name {
-	case .desert_bg_tile, .plains_bg_tile, .plains_0, .plains_1, .plains_2, .plains_3, .plains_4, .forest_bg_tile, .ruins_bg_tile:
+	case .desert_bg_tile, .plains_bg_tile, .plains_0, .plains_1, .plains_2, .plains_3, .plains_4, .tilemap_color1, .forest_bg_tile, .ruins_bg_tile:
 		return true
 	case:
 		return false

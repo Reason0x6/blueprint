@@ -19,6 +19,9 @@
 - Fixed biome/vegetation chunk math to use world grid tile size (`ENTITY_GRID_SIZE`) instead of background texture pixel size, so grass/trees now spawn visibly in nearby chunks.
 - Added per-tile biome background variation selection with deterministic hashing so backgrounds can mix multiple textures instead of repeating a single tile.
 - Wired Plains biome test variants (`Plains_0..4`) into biome background selection, with automatic fallback to the single biome tile or fallback color if variants are unavailable.
+- Reworked biome background selection to stop using `Plains_0..4` and instead mix base biome textures procedurally from a smaller shared texture set per biome.
+- Added Plains autotile terrain rendering from `tilemap_color1.png` using neighbor-mask tile selection (edges/corners/center) to reduce visible repetition.
+- Added `res/images/tilemap_color1.png` import path support (optional sprite load) and UV cell slicing (`32px` cells) for drawing autotile cells into world grid tiles.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.

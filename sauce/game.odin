@@ -321,6 +321,7 @@ Sprite_Name :: enum {
 	plains_2,
 	plains_3,
 	plains_4,
+	tilemap_color1,
 	forest_bg_tile,
 	ruins_bg_tile,
 	grass,
@@ -1252,21 +1253,74 @@ pick_loaded_variant :: proc(seed: u64, variants: []Sprite_Name) -> Sprite_Name {
 	return available[idx]
 }
 
-biome_tile_sprite :: proc(biome: Biome_Kind, tile_x: int, tile_y: int) -> Sprite_Name {
+biome_base_tile_sprite :: proc(biome: Biome_Kind, tile_x: int, tile_y: int) -> Sprite_Name {
 	seed := u64(i64(tile_x)*92837111 + i64(tile_y)*689287499)
 	seed = seed ~ 0xC2B2AE3D27D4EB4F
 
 	#partial switch biome {
 	case .desert:
-		return pick_loaded_variant(seed, []Sprite_Name{.desert_bg_tile})
+		return pick_loaded_variant(seed, []Sprite_Name{.desert_bg_tile, .bg_repeat_tex0})
 	case .plains:
-		return pick_loaded_variant(seed, []Sprite_Name{.plains_bg_tile, .plains_0, .plains_1, .plains_2, .plains_3, .plains_4})
+		return pick_loaded_variant(seed, []Sprite_Name{.plains_bg_tile, .bg_repeat_tex0})
 	case .forest:
-		return pick_loaded_variant(seed, []Sprite_Name{.forest_bg_tile})
+		return pick_loaded_variant(seed, []Sprite_Name{.forest_bg_tile, .forest_grass_texture, .bg_repeat_tex0})
 	case .ruins:
-		return pick_loaded_variant(seed, []Sprite_Name{.ruins_bg_tile})
+		return pick_loaded_variant(seed, []Sprite_Name{.ruins_bg_tile, .bg_repeat_tex0})
 	}
 	return .nil
+}
+
+TERRAIN_TILESET_CELL_PX :: 32
+TERRAIN_TILESET_COL0 :: 9
+TERRAIN_TILESET_ROW0 :: 0
+
+get_biome_for_tile :: proc(tile_x: int, tile_y: int) -> Biome_Kind {
+	chunk_x := floor_div_int(tile_x, BIOME_CHUNK_SIZE_TILES)
+	chunk_y := floor_div_int(tile_y, BIOME_CHUNK_SIZE_TILES)
+	return get_biome_for_chunk(chunk_x, chunk_y)
+}
+
+draw_tileset_cell_in_world_rect :: proc(sprite: Sprite_Name, cell_x: int, cell_y: int, world_rect: shape.Rect, col:=color.WHITE) {
+	size := get_sprite_size(sprite)
+	if size.x <= 0 || size.y <= 0 {
+		return
+	}
+
+	base_uv := atlas_uv_from_sprite(sprite)
+	uv_w := base_uv.z - base_uv.x
+	uv_h := base_uv.w - base_uv.y
+
+	u0 := base_uv.x + (f32(cell_x*TERRAIN_TILESET_CELL_PX)/size.x) * uv_w
+	v0 := base_uv.y + (f32(cell_y*TERRAIN_TILESET_CELL_PX)/size.y) * uv_h
+	u1 := base_uv.x + (f32((cell_x+1)*TERRAIN_TILESET_CELL_PX)/size.x) * uv_w
+	v1 := base_uv.y + (f32((cell_y+1)*TERRAIN_TILESET_CELL_PX)/size.y) * uv_h
+
+	draw_rect(world_rect, sprite=sprite, uv=Vec4{u0, v0, u1, v1}, col=col)
+}
+
+pick_plains_autotile_cell :: proc(tile_x: int, tile_y: int) -> (cx: int, cy: int, ok: bool) {
+	if !sprite_is_loaded(.tilemap_color1) {
+		return 0, 0, false
+	}
+	if get_biome_for_tile(tile_x, tile_y) != .plains {
+		return 0, 0, false
+	}
+
+	n := get_biome_for_tile(tile_x, tile_y+1) == .plains
+	s := get_biome_for_tile(tile_x, tile_y-1) == .plains
+	w := get_biome_for_tile(tile_x-1, tile_y) == .plains
+	e := get_biome_for_tile(tile_x+1, tile_y) == .plains
+
+	if !n && !s && !w && !e do return TERRAIN_TILESET_COL0 + 4, TERRAIN_TILESET_ROW0 + 5, true
+	if !n && !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 0, true
+	if !n && !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 0, true
+	if !s && !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 3, true
+	if !s && !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 3, true
+	if !n do return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 0, true
+	if !s do return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 3, true
+	if !w do return TERRAIN_TILESET_COL0 + 0, TERRAIN_TILESET_ROW0 + 1, true
+	if !e do return TERRAIN_TILESET_COL0 + 3, TERRAIN_TILESET_ROW0 + 1, true
+	return TERRAIN_TILESET_COL0 + 1, TERRAIN_TILESET_ROW0 + 1, true
 }
 
 biome_fallback_col :: proc(biome: Biome_Kind) -> Vec4 {
@@ -1455,17 +1509,20 @@ draw_world_biome_tiles :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			chunk_x := floor_div_int(tx, BIOME_CHUNK_SIZE_TILES)
-			chunk_y := floor_div_int(ty, BIOME_CHUNK_SIZE_TILES)
-			biome := get_biome_for_chunk(chunk_x, chunk_y)
+			biome := get_biome_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
+			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
 
-			biome_sprite := biome_tile_sprite(biome, tx, ty)
+			biome_sprite := biome_base_tile_sprite(biome, tx, ty)
 			if biome_sprite != .nil {
 				draw_sprite_in_rect(biome_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
 			} else {
-				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
 				draw_rect(tile_rect, col=biome_fallback_col(biome))
+			}
+
+			cell_x, cell_y, has_cell := pick_plains_autotile_cell(tx, ty)
+			if has_cell {
+				draw_tileset_cell_in_world_rect(.tilemap_color1, cell_x, cell_y, tile_rect, col=Vec4{1, 1, 1, 0.9})
 			}
 			tx += 1
 		}
