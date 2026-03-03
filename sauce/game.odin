@@ -118,7 +118,7 @@ Crafting_Ingredient :: struct {
 }
 
 Crafting_Recipe :: struct {
-	inputs: [dynamic]Crafting_Ingredient,
+	pattern: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot,
 	output: Crafting_Ingredient,
 }
 
@@ -563,61 +563,70 @@ parse_ingredient_token :: proc(tok: string) -> (Crafting_Ingredient, bool) {
 	return Crafting_Ingredient{item=item, count=count}, true
 }
 
-parse_ingredient_list :: proc(side: string) -> (out: [dynamic]Crafting_Ingredient, ok: bool) {
-	out = make([dynamic]Crafting_Ingredient, 0, 4, allocator=context.allocator)
-	parts := strings.split(side, "+")
-	for part0 in parts {
-		part := trim_ascii_ws(part0)
-		if len(part) == 0 do continue
+parse_recipe_pattern :: proc(side: string) -> (pattern: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot, ok: bool) {
+	rows := strings.split(side, "|")
+	if len(rows) != CRAFT_INPUT_ROWS {
+		return pattern, false
+	}
 
-		ing, ing_ok := parse_ingredient_token(part)
-		if !ing_ok {
-			return out, false
+	idx := 0
+	for r in 0..<CRAFT_INPUT_ROWS {
+		cells := strings.split(rows[r], ",")
+		if len(cells) != CRAFT_INPUT_COLS {
+			return pattern, false
 		}
 
-		merged := false
-		for i in 0..<len(out) {
-			if out[i].item == ing.item {
-				out[i].count += ing.count
-				merged = true
-				break
+		for c in 0..<CRAFT_INPUT_COLS {
+			cell := trim_ascii_ws(cells[c])
+			if len(cell) == 0 || cell == "_" || cell == "." || cell == "empty" {
+				pattern[idx] = {}
+			} else {
+				ing, ing_ok := parse_ingredient_token(cell)
+				if !ing_ok {
+					return pattern, false
+				}
+				pattern[idx] = {item=ing.item, count=ing.count}
 			}
-		}
-		if !merged {
-			append(&out, ing)
+			idx += 1
 		}
 	}
-	return out, len(out) > 0
+
+	for slot in pattern {
+		if slot.item != .nil && slot.count > 0 {
+			return pattern, true
+		}
+	}
+
+	return pattern, false
 }
 
-push_recipe :: proc(inputs: []Crafting_Ingredient, output: Crafting_Ingredient) {
-	r := Crafting_Recipe{
-		inputs = make([dynamic]Crafting_Ingredient, 0, len(inputs), allocator=context.allocator),
-		output = output,
-	}
-	for ing in inputs {
-		append(&r.inputs, ing)
-	}
-	append(&crafting_recipes, r)
+push_recipe :: proc(pattern: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot, output: Crafting_Ingredient) {
+	append(&crafting_recipes, Crafting_Recipe{pattern=pattern, output=output})
 }
 
 load_default_crafting_recipes :: proc() {
 	crafting_recipes = make([dynamic]Crafting_Recipe, 0, 8, allocator=context.allocator)
-	push_recipe([]Crafting_Ingredient{
-		{item=.wood, count=2},
-	}, {item=.stick, count=2})
-	push_recipe([]Crafting_Ingredient{
-		{item=.fiber, count=2},
-	}, {item=.rope, count=1})
-	push_recipe([]Crafting_Ingredient{
-		{item=.stone, count=1},
-		{item=.stick, count=1},
-	}, {item=.stone_blade, count=1})
-	push_recipe([]Crafting_Ingredient{
-		{item=.stone_blade, count=1},
-		{item=.stick, count=1},
-		{item=.rope, count=1},
-	}, {item=.dagger_item, count=1})
+
+	p0: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot
+	p0[0] = {item=.wood, count=1}
+	p0[2] = {item=.wood, count=1}
+	push_recipe(p0, {item=.stick, count=2})
+
+	p1: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot
+	p1[0] = {item=.fiber, count=1}
+	p1[2] = {item=.fiber, count=1}
+	push_recipe(p1, {item=.rope, count=1})
+
+	p2: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot
+	p2[0] = {item=.stone, count=1}
+	p2[2] = {item=.stick, count=1}
+	push_recipe(p2, {item=.stone_blade, count=1})
+
+	p3: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot
+	p3[0] = {item=.stone_blade, count=1}
+	p3[2] = {item=.stick, count=1}
+	p3[4] = {item=.rope, count=1}
+	push_recipe(p3, {item=.dagger_item, count=1})
 }
 
 load_crafting_recipes :: proc() {
@@ -646,9 +655,9 @@ load_crafting_recipes :: proc() {
 
 		left := trim_ascii_ws(line[:arrow])
 		right := trim_ascii_ws(line[arrow+2:])
-		inputs, in_ok := parse_ingredient_list(left)
+		pattern, in_ok := parse_recipe_pattern(left)
 		if !in_ok {
-			log.warnf("crafting_recipes line %v invalid inputs: %q", line_no, left)
+			log.warnf("crafting_recipes line %v invalid pattern: %q", line_no, left)
 			continue
 		}
 		output, out_ok := parse_ingredient_token(right)
@@ -657,7 +666,7 @@ load_crafting_recipes :: proc() {
 			continue
 		}
 
-		push_recipe(inputs[:], output)
+		push_recipe(pattern, output)
 	}
 
 	if len(crafting_recipes) == 0 {
@@ -1358,25 +1367,33 @@ crafting_set_output :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) 
 
 update_crafting_output :: proc(inv: ^Inventory_State) {
 	input := inv.crafting_slots[:]
-	total_count := get_total_non_empty_count_in_slots(input)
-	if total_count == 0 {
+	if get_total_non_empty_count_in_slots(input) == 0 {
 		inv.crafting_recipe_index = -1
 		crafting_set_output(inv, .nil, 0)
 		return
 	}
+
 	for i in 0..<len(crafting_recipes) {
 		r := crafting_recipes[i]
-		required_total := 0
 		matches := true
-		for ing in r.inputs {
-			required_total += ing.count
-			if get_total_count_in_slots(input, ing.item) != ing.count {
-				matches = false
-				break
+
+		for slot_i in 0..<CRAFT_INPUT_SLOT_COUNT {
+			req := r.pattern[slot_i]
+			slot := input[slot_i]
+			if req.item == .nil || req.count <= 0 {
+				if slot.item != .nil && slot.count > 0 {
+					matches = false
+					break
+				}
+			} else {
+				if slot.item != req.item || slot.count < req.count {
+					matches = false
+					break
+				}
 			}
 		}
+
 		if !matches do continue
-		if required_total != total_count do continue
 
 		inv.crafting_recipe_index = i
 		crafting_set_output(inv, r.output.item, r.output.count)
@@ -1387,24 +1404,29 @@ update_crafting_output :: proc(inv: ^Inventory_State) {
 	crafting_set_output(inv, .nil, 0)
 }
 
-consume_item_from_crafting_slots :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -> bool {
-	remaining := count
-	for i in 0..<len(inv.crafting_slots) {
-		slot := &inv.crafting_slots[i]
-		if slot.item != item do continue
-		if slot.count <= 0 do continue
+consume_recipe_pattern_slots :: proc(inv: ^Inventory_State, pattern: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot) -> bool {
+	for i in 0..<CRAFT_INPUT_SLOT_COUNT {
+		req := pattern[i]
+		if req.item == .nil || req.count <= 0 do continue
 
-		take := min(slot.count, remaining)
-		slot.count -= take
-		remaining -= take
+		slot := inv.crafting_slots[i]
+		if slot.item != req.item || slot.count < req.count {
+			return false
+		}
+	}
+
+	for i in 0..<CRAFT_INPUT_SLOT_COUNT {
+		req := pattern[i]
+		if req.item == .nil || req.count <= 0 do continue
+
+		slot := &inv.crafting_slots[i]
+		slot.count -= req.count
 		if slot.count <= 0 {
 			slot^ = {}
 		}
-		if remaining <= 0 {
-			return true
-		}
 	}
-	return false
+
+	return true
 }
 
 try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, output: Inventory_Slot) -> bool {
@@ -1420,12 +1442,7 @@ try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, outpu
 		return false
 	}
 
-	for ing in r.inputs {
-		if !consume_item_from_crafting_slots(inv, ing.item, ing.count) {
-			return false
-		}
-	}
-	return true
+	return consume_recipe_pattern_slots(inv, r.pattern)
 }
 
 inventory_update :: proc() {

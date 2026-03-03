@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Enable player collision for sprout entities
+## [HEAD] Convert crafting to shape-based 2x3 slot recipes
+- Replaced crafting recipe matching logic so recipes now match exact slot layout on the 2x3 crafting grid instead of aggregated item counts.
+- Updated crafting ingredient consumption to consume from the exact matched slots defined by each recipe pattern.
+- Switched `res/data/crafting_recipes.txt` to a shape format: `r0c0,r0c1 | r1c0,r1c1 | r2c0,r2c1 -> output`, with `_`/`.`/`empty` as empty-cell tokens.
+
+## [c52166d] Enable player collision for sprout entities
 - Changed `setup_sprout_ent` so `sprout_ent` now sets `blocks_player = true`, making sprouts collide with and block player movement.
 
 ## [bae4fc8] Map stone and rope items to their new texture sprites

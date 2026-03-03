@@ -1,12 +1,14 @@
-# Crafting recipe format:
-#   input_item:count + input_item:count -> output_item:count
+# Crafting recipe format (2x3 shape-based):
+#   row0_col0,row0_col1 | row1_col0,row1_col1 | row2_col0,row2_col1 -> output_item:count
 # Notes:
 # - Whitespace is ignored.
-# - `+` combines inputs.
+# - Use `_`, `.`, or `empty` for an empty slot.
+# - Each non-empty slot token is `item` or `item:count`.
+# - Recipes match slot positions (shape), not just total item counts.
 # - `#` starts a comment line.
 # - Item tokens must match Item_Kind names used by the game.
 
-wood:2 -> stick:2
-fiber:2 -> rope:1
-stone:1 + stick:1 -> stone_blade:1
-stone_blade:1 + stick:1 + rope:1 -> dagger_item:1
+wood,_ | wood,_ | _,_ -> stick:2
+fiber,_ | fiber,_ | _,_ -> rope:1
+stone,_ | stick,_ | _,_ -> stone_blade:1
+stone_blade,_ | stick,_ | rope,_ -> dagger_item:1
