@@ -1,6 +1,12 @@
 # Changelog
 
-## [HEAD] Add modal UI overlay gating plus sapling placement, break bonus drops, and visible large grid
+## [HEAD] Add active pause menu overlay with global ESC open/close behavior
+- Added a pause menu overlay (`UI_OVERLAY_PAUSE`) with centered Resume UI.
+- `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
+- Game update is now actively paused while pause overlay is open (world systems stop updating).
+- Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
+
+## [adafee3] Add modal UI overlay gating plus sapling placement, break bonus drops, and visible large grid
 - Added generic UI overlay gating (`is_any_ui_overlay_open`) so movement, hitting, right-click use, and interaction pause while any overlay is open, plus `Esc` close-all overlay behavior.
 - Added `sapling` as an item kind and placement flow: with sapling equipped, clicking empty valid world space now makes the player move into range and then place a `sapling_ent`.
 - Added low-opacity placeable hover preview for equipped placeables, visible within `2x` interaction range.

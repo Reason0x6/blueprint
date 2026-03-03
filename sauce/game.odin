@@ -97,6 +97,7 @@ LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
+UI_OVERLAY_PAUSE : u32 : 1 << 1
 
 Item_Kind :: enum u8 {
 	nil,
@@ -859,6 +860,7 @@ app_frame :: proc() {
 		draw_text(dura_button_pos + Vec2{2, -2}, dura_button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
 
 		draw_inventory_ui()
+		draw_pause_menu_ui()
 	}
 
 	sound_play_continuously("event:/ambiance", "")
@@ -868,6 +870,31 @@ app_frame :: proc() {
 
 	volume :f32= 0.75
 	sound_update(get_player().pos, volume)
+}
+
+draw_pause_menu_ui :: proc() {
+	if !is_ui_overlay_open(UI_OVERLAY_PAUSE) {
+		return
+	}
+
+	cx, cy := screen_pivot(.center_center)
+	panel_size := Vec2{180, 86}
+	panel := shape.rect_make(Vec2{cx, cy}, panel_size, pivot=.center_center)
+	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.92}, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
+	draw_text(Vec2{cx, cy + 26}, "Paused", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
+
+	button_size := Vec2{78, 16}
+	resume_rect := shape.rect_make(Vec2{cx, cy - 2}, button_size, pivot=.center_center)
+	resume_hover, resume_pressed := raw_button(resume_rect)
+	resume_col := Vec4{0.1, 0.1, 0.1, 0.9}
+	if resume_hover {
+		resume_col = Vec4{0.16, 0.16, 0.16, 0.95}
+	}
+	draw_rect(resume_rect, col=resume_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	draw_text(resume_rect.xy, "Resume", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
+	if resume_pressed {
+		close_all_ui_overlays()
+	}
 }
 
 app_shutdown :: proc() {
@@ -884,6 +911,15 @@ game_update :: proc() {
 
 	// this'll be using the last frame's camera position, but it's fine for most things
 	push_coord_space(get_world_space())
+
+	if key_pressed(.ESC) {
+		consume_key_pressed(.ESC)
+		if is_any_ui_overlay_open() {
+			close_all_ui_overlays()
+		} else {
+			set_ui_overlay_open(UI_OVERLAY_PAUSE, true)
+		}
+	}
 
 	// setup world for first game tick
 	if ctx.gs.ticks == 0 {
@@ -906,6 +942,10 @@ game_update :: proc() {
 		spawn_item_pickup(.fiber, 4, Vec2{-104, 8})
 		spawn_item_pickup(.stone_multitool, 1, Vec2{-55, 6})
 		
+	}
+
+	if is_game_paused() {
+		return
 	}
 
 	rebuild_scratch_helpers()
@@ -1745,6 +1785,10 @@ close_all_ui_overlays :: proc() {
 	ctx.gs.inventory.open = false
 }
 
+is_game_paused :: proc() -> bool {
+	return is_ui_overlay_open(UI_OVERLAY_PAUSE)
+}
+
 crafting_set_output :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) {
 	if item == .nil || count <= 0 {
 		inv.crafting_output = {}
@@ -1835,11 +1879,6 @@ try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, outpu
 
 inventory_update :: proc() {
 	inv := &ctx.gs.inventory
-
-	if key_pressed(.ESC) {
-		consume_key_pressed(.ESC)
-		close_all_ui_overlays()
-	}
 
 	if key_pressed(.TAB) {
 		consume_key_pressed(.TAB)
