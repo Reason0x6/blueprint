@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Split inventory and crafting into separate UI panels
+## [HEAD] Add shift-right-click hitbox/overlap debug editor UI
+- Added a debug box editor that opens for a selected entity when you Shift+Right-click it, with live selection clear on empty-space Shift+Right-click.
+- Added on-screen +/- controls for hitbox and overlap offset/size values and applied those overrides live to collision/overlap queries for the selected entity.
+- Added copy-ready code suggestion lines in the debug panel to help transfer edited values back into `get_entity_hitbox_rect` and `sprite_data`.
+
+## [db85ebf] Split inventory and crafting into separate UI panels
 - Separated the combined inventory/crafting layout into two distinct boxes with independent panel rects.
 - Kept existing drag/drop behavior and slot hit-testing intact by reusing the same slot helper procs with updated panel anchors.
 - Updated panel headers so inventory and crafting each have clear labels in their own boxes.
