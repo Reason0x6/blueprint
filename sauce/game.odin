@@ -810,7 +810,7 @@ parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 		}
 	}
 
-	if t == "water" {
+	if t == "water" || t == "0" {
 		return Terrain_Tile{kind=.water}, true
 	}
 	if t == "_" || t == "." || t == "empty" {
