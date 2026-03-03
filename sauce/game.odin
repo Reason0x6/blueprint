@@ -145,6 +145,9 @@ Inventory_State :: struct {
 CRAFT_INPUT_COLS :: 2
 CRAFT_INPUT_ROWS :: 3
 CRAFT_INPUT_SLOT_COUNT :: CRAFT_INPUT_COLS * CRAFT_INPUT_ROWS
+MAX_TERRAIN_STRUCTURES :: 64
+MAX_TERRAIN_STRUCTURE_ROWS :: 64
+MAX_TERRAIN_STRUCTURE_COLS :: 64
 
 Drag_From_Kind :: enum u8 {
 	none,
@@ -164,6 +167,26 @@ Crafting_Recipe :: struct {
 }
 
 crafting_recipes: [dynamic]Crafting_Recipe
+
+Terrain_Tile_Kind :: enum u8 {
+	empty,
+	block,
+	water,
+}
+
+Terrain_Tile :: struct {
+	kind: Terrain_Tile_Kind,
+	block_index: int,
+}
+
+Terrain_Structure :: struct {
+	name: string,
+	rows: int,
+	cols: int,
+	tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]Terrain_Tile,
+}
+
+terrain_structures: [dynamic]Terrain_Structure
 
 //
 // action -> key mapping
@@ -324,6 +347,7 @@ Sprite_Name :: enum {
 	forest_bg_tile,
 	ruins_bg_tile,
 	grass,
+	water,
 	dagger_item,
 	dagger_item_flying,
 	movement_indicator,
@@ -756,6 +780,153 @@ load_crafting_recipes :: proc() {
 	}
 }
 
+compact_no_ws :: proc(s: string) -> string {
+	out := make([dynamic]u8, 0, len(s), allocator=context.temp_allocator)
+	for i in 0..<len(s) {
+		c := s[i]
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			continue
+		}
+		append(&out, c)
+	}
+	return string(out[:])
+}
+
+parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
+	t := trim_ascii_ws(tok)
+	if len(t) == 0 {
+		return {}, false
+	}
+
+	if t == "water" {
+		return Terrain_Tile{kind=.water}, true
+	}
+	if t == "_" || t == "." || t == "empty" {
+		return Terrain_Tile{kind=.empty}, true
+	}
+
+	block_index, ok := parse_positive_int_str(t)
+	if !ok {
+		return {}, false
+	}
+	if block_index < 1 || block_index > TERRAIN_MAX_BLOCK_INDEX {
+		return {}, false
+	}
+	return Terrain_Tile{kind=.block, block_index=block_index}, true
+}
+
+parse_terrain_structure_expr :: proc(name: string, expr_raw: string) -> bool {
+	expr := compact_no_ws(expr_raw)
+	if len(expr) < 4 || !strings.has_prefix(expr, "[[") || !strings.has_suffix(expr, "]]") {
+		log.warnf("terrain structure %q invalid format", name)
+		return false
+	}
+
+	if len(terrain_structures) >= MAX_TERRAIN_STRUCTURES {
+		log.warnf("too many terrain structures, max=%v", MAX_TERRAIN_STRUCTURES)
+		return false
+	}
+
+	body := expr[2:len(expr)-2]
+	row_strs := strings.split(body, "],[")
+	if len(row_strs) == 0 || len(row_strs) > MAX_TERRAIN_STRUCTURE_ROWS {
+		log.warnf("terrain structure %q invalid row count=%v", name, len(row_strs))
+		return false
+	}
+
+	st := Terrain_Structure{name=name}
+	st.rows = len(row_strs)
+
+	for r in 0..<len(row_strs) {
+		cells := strings.split(row_strs[r], ",")
+		if len(cells) == 0 || len(cells) > MAX_TERRAIN_STRUCTURE_COLS {
+			log.warnf("terrain structure %q row %v invalid col count=%v", name, r, len(cells))
+			return false
+		}
+		if r == 0 {
+			st.cols = len(cells)
+		} else if len(cells) != st.cols {
+			log.warnf("terrain structure %q rows have mismatched col counts", name)
+			return false
+		}
+
+		for c in 0..<len(cells) {
+			tile, ok := parse_terrain_tile_token(cells[c])
+			if !ok {
+				log.warnf("terrain structure %q has invalid token %q at [%v,%v]", name, cells[c], r, c)
+				return false
+			}
+			st.tiles[r][c] = tile
+		}
+	}
+
+	append(&terrain_structures, st)
+	return true
+}
+
+load_default_terrain_structures :: proc() {
+	terrain_structures = make([dynamic]Terrain_Structure, 0, 4, allocator=context.allocator)
+	_ = parse_terrain_structure_expr("default_flat", "[[11]]")
+}
+
+load_terrain_structures :: proc() {
+	terrain_structures = make([dynamic]Terrain_Structure, 0, 16, allocator=context.allocator)
+
+	path := "res/data/terrain_structures.txt"
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil || len(data) == 0 {
+		log.warnf("terrain_structures not found at %q, using defaults", path)
+		load_default_terrain_structures()
+		return
+	}
+
+	text := string(data)
+	lines := strings.split(text, "\n")
+	i := 0
+	for i < len(lines) {
+		line := trim_ascii_ws(lines[i])
+		i += 1
+
+		if len(line) == 0 || strings.has_prefix(line, "#") {
+			continue
+		}
+
+		eq := strings.index(line, "=")
+		if eq < 0 {
+			log.warnf("terrain_structures invalid line (missing '='): %q", line)
+			continue
+		}
+
+		name := trim_ascii_ws(line[:eq])
+		expr := trim_ascii_ws(line[eq+1:])
+		expr_buf := make([dynamic]u8, 0, len(expr)+64, allocator=context.temp_allocator)
+		append(&expr_buf, expr)
+		bracket_balance := strings.count(expr, "[") - strings.count(expr, "]")
+
+		for bracket_balance > 0 && i < len(lines) {
+			next_line := trim_ascii_ws(lines[i])
+			i += 1
+			if len(next_line) == 0 || strings.has_prefix(next_line, "#") {
+				continue
+			}
+			append(&expr_buf, next_line)
+			bracket_balance += strings.count(next_line, "[") - strings.count(next_line, "]")
+		}
+
+		if len(name) == 0 {
+			log.warnf("terrain_structures has unnamed entry: %q", line)
+			continue
+		}
+
+		_ = parse_terrain_structure_expr(name, string(expr_buf[:]))
+	}
+
+	if len(terrain_structures) == 0 {
+		log.warn("no valid terrain structures loaded; using defaults")
+		load_default_terrain_structures()
+	}
+}
+
 load_sprite_frame_meta :: proc() {
 	for sprite in Sprite_Name {
 		if sprite == .nil do continue
@@ -825,6 +996,7 @@ get_sprite_center_mass :: proc(img: Sprite_Name) -> Vec2 {
 app_init :: proc() {
 	load_sprite_frame_meta()
 	load_crafting_recipes()
+	load_terrain_structures()
 }
 
 app_frame :: proc() {
@@ -1247,14 +1419,54 @@ positive_mod_int :: proc(v: int, m: int) -> int {
 	return r
 }
 
+zigzag_int :: proc(v: int) -> int {
+	if v >= 0 {
+		return v * 2
+	}
+	return (-v * 2) - 1
+}
+
+terrain_structure_index_for_chunk :: proc(chunk_x: int, chunk_y: int) -> int {
+	if len(terrain_structures) == 0 {
+		return -1
+	}
+	order_key := zigzag_int(chunk_y)*2048 + zigzag_int(chunk_x)
+	return positive_mod_int(order_key, len(terrain_structures))
+}
+
+terrain_tile_for_tile :: proc(tile_x: int, tile_y: int) -> Terrain_Tile {
+	if len(terrain_structures) == 0 {
+		return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
+	}
+
+	chunk_x := floor_div_int(tile_x, BIOME_CHUNK_SIZE_TILES)
+	chunk_y := floor_div_int(tile_y, BIOME_CHUNK_SIZE_TILES)
+	struct_idx := terrain_structure_index_for_chunk(chunk_x, chunk_y)
+	if struct_idx < 0 || struct_idx >= len(terrain_structures) {
+		return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
+	}
+
+	st := terrain_structures[struct_idx]
+	if st.cols <= 0 || st.rows <= 0 {
+		return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
+	}
+
+	lx := positive_mod_int(tile_x, st.cols)
+	ly := positive_mod_int(tile_y, st.rows)
+	return st.tiles[ly][lx]
+}
+
 terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {
-	_ = tile_x
-	_ = tile_y
-	return TERRAIN_DEFAULT_BLOCK_INDEX
+	tile := terrain_tile_for_tile(tile_x, tile_y)
+	if tile.kind == .block {
+		return tile.block_index
+	}
+	return 0
 }
 
 is_terrain_solid_tile :: proc(tile_x: int, tile_y: int) -> bool {
-	return terrain_block_index_for_tile(tile_x, tile_y) > 0
+	tile := terrain_tile_for_tile(tile_x, tile_y)
+	return tile.kind == .block && tile.block_index > 0
 }
 
 draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, world_rect: shape.Rect, col:=color.WHITE) {
@@ -1456,16 +1668,25 @@ draw_world_terrain_tiles :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
-			block_index := terrain_block_index_for_tile(tx, ty)
+			tile := terrain_tile_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
 			draw_rect(tile_rect, col=Vec4{0.12, 0.19, 0.12, 1.0})
 
-			if sprite_is_loaded(.tilemap_color1) {
-				draw_tileset_block_in_world_rect(.tilemap_color1, block_index, tile_rect, col=Vec4{1, 1, 1, 0.95})
+			if tile.kind == .water {
+				if sprite_is_loaded(.water) {
+					draw_sprite_in_rect(.water, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+				} else {
+					draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
+				}
+			} else if tile.kind == .block {
+				if sprite_is_loaded(.tilemap_color1) {
+					draw_tileset_block_in_world_rect(.tilemap_color1, tile.block_index, tile_rect, col=Vec4{1, 1, 1, 0.95})
+				}
 			}
 			if ctx.gs.debug_show_grid {
-				draw_text(tile_center, fmt.tprintf("%v", block_index), pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
+				label := tile.kind == .water ? "water" : fmt.tprintf("%v", tile.block_index)
+				draw_text(tile_center, label, pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
 			}
 			tx += 1
 		}

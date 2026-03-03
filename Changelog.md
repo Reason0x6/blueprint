@@ -39,6 +39,9 @@
 - Switched center-grid snapping to floor-cell center mapping (`floor(v/grid)*grid + half`) to eliminate consistent one-tile vertical offset during placement.
 - Tree destruction now always spawns a `sprout_ent` in addition to existing wood break drops, guaranteeing wood + sprout outcome on tree break.
 - Refactored entity break drops from single `break_drop_item/count` fields to a multi-drop list (`break_drops + break_drop_len`) so an entity can define more than one guaranteed item drop on break.
+- Added data-driven terrain structure loading from `res/data/terrain_structures.txt` using syntax like `name = [[...],[...]]`, where each array position maps directly to tile column/row.
+- Added terrain structure tokens for numeric block indices (`1..54`) and `water`, with `water` tiles rendering `water.png`.
+- Terrain generation now resolves tiles from structure definitions in deterministic chunk order, while keeping a default fallback structure when no file is present.
 - `Esc` now opens pause when no overlays are open, and closes all overlays when any overlay is open.
 - Game update is now actively paused while pause overlay is open (world systems stop updating).
 - Overlay input handling is now centralized in `game_update` instead of inventory-only escape handling.
