@@ -61,6 +61,12 @@ Game_State :: struct {
 	hit_cooldown_end_time: f64,
 	hit_cooldown_duration: f64,
 	bg_use_forest_grass: bool,
+	swing_active: bool,
+	swing_sprite: Sprite_Name,
+	swing_anim_index: int,
+	swing_next_frame_end_time: f64,
+	swing_rotation: f32,
+	swing_dir: Vec2,
 	inventory: Inventory_State,
 
 	scratch: struct {
@@ -904,6 +910,7 @@ game_update :: proc() {
 		update_entity_durability_regen(e)
 		update_entity_hit_flash(e)
 	}
+	update_player_swing_fx()
 
 	apply_entity_grid_snap()
 
@@ -1434,6 +1441,11 @@ item_hit_durability_multiplier :: proc(item: Item_Kind) -> f32 {
 	}
 }
 
+item_swing_sprite :: proc(item: Item_Kind) -> Sprite_Name {
+	// Fallback to item icon sprite unless dedicated <item>_swing sprites are wired in Sprite_Name.
+	return item_icon_sprite(item)
+}
+
 start_hit_cooldown_for_item :: proc(item: Item_Kind) {
 	dur := item_hit_cooldown(item)
 	ctx.gs.hit_cooldown_duration = dur
@@ -1455,6 +1467,66 @@ get_hit_durability_damage :: proc(hitter: ^Entity) -> int {
 	}
 
 	return max(0, int(math.ceil(mult)))
+}
+
+start_player_swing_fx :: proc(target_pos: Vec2) {
+	player := get_player()
+	if !is_valid(player^) {
+		return
+	}
+
+	item, count := get_equipped_item()
+	if count <= 0 {
+		return
+	}
+
+	sprite := item_swing_sprite(item)
+	if sprite == .nil {
+		return
+	}
+
+	dir := target_pos - player.pos
+	len_sq := dir.x*dir.x + dir.y*dir.y
+	if len_sq <= 0.0001 {
+		dir = Vec2{1, 0}
+		if player.last_known_x_dir < 0 {
+			dir = Vec2{-1, 0}
+		}
+	} else {
+		dir /= math.sqrt(len_sq)
+	}
+
+	ctx.gs.swing_active = true
+	ctx.gs.swing_sprite = sprite
+	ctx.gs.swing_anim_index = 0
+	ctx.gs.swing_next_frame_end_time = 0
+	ctx.gs.swing_dir = dir
+	ctx.gs.swing_rotation = math.atan2(dir.y, dir.x) * (180.0 / math.PI)
+}
+
+update_player_swing_fx :: proc() {
+	if !ctx.gs.swing_active || ctx.gs.swing_sprite == .nil {
+		return
+	}
+
+	frame_count := get_frame_count(ctx.gs.swing_sprite)
+	if frame_count <= 0 {
+		ctx.gs.swing_active = false
+		return
+	}
+
+	if ctx.gs.swing_next_frame_end_time == 0 {
+		ctx.gs.swing_next_frame_end_time = now() + 0.05
+	}
+
+	if end_time_up(ctx.gs.swing_next_frame_end_time) {
+		ctx.gs.swing_anim_index += 1
+		ctx.gs.swing_next_frame_end_time = 0
+		if ctx.gs.swing_anim_index >= frame_count {
+			ctx.gs.swing_anim_index = frame_count - 1
+			ctx.gs.swing_active = false
+		}
+	}
 }
 
 inventory_add_item :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) -> (added: int) {
@@ -2204,6 +2276,10 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		return
 	}
 
+	if is_valid(hitter^) && hitter.kind == .player {
+		start_player_swing_fx(target.pos)
+	}
+
 	damage := get_hit_durability_damage(hitter)
 	if damage > 0 {
 		target.hit_flash = Vec4{1, 1, 1, 1}
@@ -2717,6 +2793,16 @@ setup_player :: proc(e: ^Entity) {
 	e.draw_proc = proc(e: Entity) {
 		draw_sprite(e.pos + Vec2{0, -4}, .shadow_medium, col={1,1,1,0.2})
 		draw_entity_default(e)
+
+		if ctx.gs.swing_active && ctx.gs.swing_sprite != .nil {
+			swing_dir := ctx.gs.swing_dir
+			hand_pos := e.pos + Vec2{0, 24} + swing_dir * 8
+			xform := Matrix4(1)
+			xform *= utils.xform_rotate(ctx.gs.swing_rotation)
+			xform *= utils.xform_scale(Vec2{0.9, 0.9})
+			draw_sprite(hand_pos, ctx.gs.swing_sprite, pivot=.center_center, xform=xform, anim_index=ctx.gs.swing_anim_index, z_layer=.playspace)
+			return
+		}
 
 		equipped_item, equipped_count := get_equipped_item()
 		if equipped_item == .dagger_item && equipped_count > 0 {

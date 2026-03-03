@@ -1,6 +1,11 @@
 # Changelog
 
-## [HEAD] Reduce equipped item label size by 60 percent
+## [HEAD] Add player item swing FX that points at melee hit targets
+- Added a player swing FX state and animation playback that triggers when the player hits an entity.
+- Swing visuals rotate toward the hit target direction and render from the player hand position.
+- Added item swing sprite selection helper (currently falls back to the item icon sprite until dedicated `<item>_swing` sprite enums are wired).
+
+## [a086547] Reduce equipped item label size by 60 percent
 - Set the hotbar `Equipped:` UI label draw scale to `0.4`, making it 60% smaller than the previous default size.
 
 ## [0a57857] Randomize repeating background texture and remove player tint filter

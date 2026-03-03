@@ -10,5 +10,6 @@
 
 wood,_ | wood,_ | _,_ -> stick:2
 fiber,_ | fiber,_ | _,_ -> rope:1
-stone,_ | stick,_ | _,_ -> stone_blade:1
+stone,_ | stone,_ | _,_ -> stone_blade:1
 stone_blade,_ | stick,_ | rope,_ -> dagger_item:1
+stick,stone | stick,stone | stick,_ -> stone_multitool:1
