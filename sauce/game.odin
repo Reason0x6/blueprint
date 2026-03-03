@@ -61,7 +61,6 @@ Game_State :: struct {
 	has_hold_hit_target: bool,
 	hit_cooldown_end_time: f64,
 	hit_cooldown_duration: f64,
-	bg_use_forest_grass: bool,
 	ui_overlay_mask: u32,
 	swing_active: bool,
 	swing_sprite: Sprite_Name,
@@ -96,6 +95,7 @@ HIT_DROP_MAX_FROM_EDGE: f32 : 40
 LOW_DURABILITY_FLASH_THRESHOLD :: 3
 LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
+FOREST_GRASS_TILE_CHANCE: f32 : 1.0/3.0
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
@@ -938,7 +938,6 @@ game_update :: proc() {
 		player := entity_create(.player)
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
-		ctx.gs.bg_use_forest_grass = roll_chance(1.0/3.0, 0xB16B00B5)
 		ctx.gs.debug_show_grid = true
 
 		oblisk := entity_create(.oblisk_ent)
@@ -1060,11 +1059,7 @@ game_draw :: proc() {
 
 	// this is so we can get the current pixel in the shader in world space (VERYYY useful)
 	draw_frame.ndc_to_world_xform = get_world_space_camera() * linalg.inverse(get_world_space_proj())
-	bg_sprite := Sprite_Name.bg_repeat_tex0
-	if ctx.gs.bg_use_forest_grass {
-		bg_sprite = .forest_grass_texture
-	}
-	draw_frame.bg_repeat_tex0_atlas_uv = atlas_uv_from_sprite(bg_sprite)
+	draw_frame.bg_repeat_tex0_atlas_uv = atlas_uv_from_sprite(.bg_repeat_tex0)
 
 	// background thing
 	{
@@ -1078,6 +1073,7 @@ game_draw :: proc() {
 	// world
 	{
 		push_coord_space(get_world_space())
+		draw_world_forest_grass_tiles()
 		if ctx.gs.debug_show_grid {
 			draw_world_grid()
 		}
@@ -1182,6 +1178,41 @@ draw_placeable_preview :: proc() {
 		col = Vec4{1, 0.25, 0.25, 0.28}
 	}
 	draw_sprite(place_pos, sprite, pivot=.center_center, col=col, z_layer=.vfx)
+}
+
+is_forest_grass_tile :: proc(tile_x: int, tile_y: int) -> bool {
+	seed := u64(i64(tile_x)*1103515245 + i64(tile_y)*214013 + 2531011)
+	seed ^= 0x9E3779B97F4A7C15
+	return random01_from_seed(seed) < FOREST_GRASS_TILE_CHANCE
+}
+
+draw_world_forest_grass_tiles :: proc() {
+	tile_size := get_sprite_size(.bg_repeat_tex0)
+	if tile_size.x <= 0 || tile_size.y <= 0 {
+		return
+	}
+
+	center := ctx.gs.cam_pos
+	half_w := f32(GAME_RES_WIDTH)*0.5 + tile_size.x
+	half_h := f32(GAME_RES_HEIGHT)*0.5 + tile_size.y
+
+	min_tile_x := int(math.floor((center.x - half_w) / tile_size.x))
+	max_tile_x := int(math.ceil((center.x + half_w) / tile_size.x))
+	min_tile_y := int(math.floor((center.y - half_h) / tile_size.y))
+	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
+
+	ty := min_tile_y
+	for ty <= max_tile_y {
+		tx := min_tile_x
+		for tx <= max_tile_x {
+			if is_forest_grass_tile(tx, ty) {
+				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
+				draw_sprite(tile_center, .forest_grass_texture, pivot=.center_center, z_layer=.background)
+			}
+			tx += 1
+		}
+		ty += 1
+	}
 }
 
 draw_world_grid :: proc() {
