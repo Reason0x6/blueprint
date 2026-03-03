@@ -806,59 +806,6 @@ app_frame :: proc() {
 		// ui space example
 		push_coord_space(get_screen_space())
 
-		x, y := screen_pivot(.top_left)
-		x += 2
-		y -= 2
-
-		button_pos := Vec2{x, y - 14}
-		button_size := Vec2{90, 12}
-		button_rect := shape.rect_make(button_pos, button_size, pivot=.top_left)
-		hover, pressed := raw_button(button_rect)
-		if pressed {
-			ctx.gs.debug_show_hitboxes = !ctx.gs.debug_show_hitboxes
-		}
-
-		button_col := Vec4{0.05, 0.05, 0.05, 0.7}
-		if hover {
-			button_col = Vec4{0.2, 0.2, 0.2, 0.8}
-		}
-		draw_rect(button_rect, col=button_col, outline_col=Vec4{1, 1, 1, 0.45}, z_layer=.ui)
-
-		button_label := ctx.gs.debug_show_hitboxes ? "Hitboxes: ON" : "Hitboxes: OFF"
-		draw_text(button_pos + Vec2{2, -2}, button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
-
-		overlap_button_pos := button_pos + Vec2{0, -14}
-		overlap_button_rect := shape.rect_make(overlap_button_pos, button_size, pivot=.top_left)
-		overlap_hover, overlap_pressed := raw_button(overlap_button_rect)
-		if overlap_pressed {
-			ctx.gs.debug_show_overlap_boxes = !ctx.gs.debug_show_overlap_boxes
-		}
-
-		overlap_button_col := Vec4{0.05, 0.05, 0.05, 0.7}
-		if overlap_hover {
-			overlap_button_col = Vec4{0.2, 0.2, 0.2, 0.8}
-		}
-		draw_rect(overlap_button_rect, col=overlap_button_col, outline_col=Vec4{1, 1, 1, 0.45}, z_layer=.ui)
-
-		overlap_button_label := ctx.gs.debug_show_overlap_boxes ? "Overlap: ON" : "Overlap: OFF"
-		draw_text(overlap_button_pos + Vec2{2, -2}, overlap_button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
-
-		dura_button_pos := overlap_button_pos + Vec2{0, -14}
-		dura_button_rect := shape.rect_make(dura_button_pos, button_size, pivot=.top_left)
-		dura_hover, dura_pressed := raw_button(dura_button_rect)
-		if dura_pressed {
-			ctx.gs.debug_show_durability = !ctx.gs.debug_show_durability
-		}
-
-		dura_button_col := Vec4{0.05, 0.05, 0.05, 0.7}
-		if dura_hover {
-			dura_button_col = Vec4{0.2, 0.2, 0.2, 0.8}
-		}
-		draw_rect(dura_button_rect, col=dura_button_col, outline_col=Vec4{1, 1, 1, 0.45}, z_layer=.ui)
-
-		dura_button_label := ctx.gs.debug_show_durability ? "Durability: ON" : "Durability: OFF"
-		draw_text(dura_button_pos + Vec2{2, -2}, dura_button_label, z_layer=.ui, pivot=.top_left, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
-
 		draw_inventory_ui()
 		draw_pause_menu_ui()
 	}
@@ -882,13 +829,13 @@ draw_pause_menu_ui :: proc() {
 	draw_rect(screen_rect, col=Vec4{0.5, 0.5, 0.5, 0.35}, z_layer=.pause_menu)
 
 	cx, cy := screen_pivot(.center_center)
-	panel_size := Vec2{180, 86}
+	panel_size := Vec2{190, 142}
 	panel := shape.rect_make(Vec2{cx, cy}, panel_size, pivot=.center_center)
 	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.92}, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
-	draw_text(Vec2{cx, cy + 26}, "Paused", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
+	draw_text(Vec2{cx, cy + 52}, "Paused", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
 
 	button_size := Vec2{78, 16}
-	resume_rect := shape.rect_make(Vec2{cx, cy - 2}, button_size, pivot=.center_center)
+	resume_rect := shape.rect_make(Vec2{cx, cy + 24}, button_size, pivot=.center_center)
 	resume_hover, resume_pressed := raw_button(resume_rect)
 	resume_col := Vec4{0.1, 0.1, 0.1, 0.9}
 	if resume_hover {
@@ -899,6 +846,48 @@ draw_pause_menu_ui :: proc() {
 	if resume_pressed {
 		close_all_ui_overlays()
 	}
+
+	debug_button_size := Vec2{120, 12}
+	debug_start := Vec2{cx, cy - 2}
+
+	hitboxes_rect := shape.rect_make(debug_start, debug_button_size, pivot=.center_center)
+	hitboxes_hover, hitboxes_pressed := raw_button(hitboxes_rect)
+	if hitboxes_pressed {
+		ctx.gs.debug_show_hitboxes = !ctx.gs.debug_show_hitboxes
+	}
+	hitboxes_col := Vec4{0.05, 0.05, 0.05, 0.78}
+	if hitboxes_hover {
+		hitboxes_col = Vec4{0.2, 0.2, 0.2, 0.85}
+	}
+	draw_rect(hitboxes_rect, col=hitboxes_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	hitboxes_label := ctx.gs.debug_show_hitboxes ? "Hitboxes: ON" : "Hitboxes: OFF"
+	draw_text(hitboxes_rect.xy, hitboxes_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
+
+	overlap_rect := shape.rect_make(debug_start + Vec2{0, -14}, debug_button_size, pivot=.center_center)
+	overlap_hover, overlap_pressed := raw_button(overlap_rect)
+	if overlap_pressed {
+		ctx.gs.debug_show_overlap_boxes = !ctx.gs.debug_show_overlap_boxes
+	}
+	overlap_col := Vec4{0.05, 0.05, 0.05, 0.78}
+	if overlap_hover {
+		overlap_col = Vec4{0.2, 0.2, 0.2, 0.85}
+	}
+	draw_rect(overlap_rect, col=overlap_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	overlap_label := ctx.gs.debug_show_overlap_boxes ? "Overlap: ON" : "Overlap: OFF"
+	draw_text(overlap_rect.xy, overlap_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
+
+	dura_rect := shape.rect_make(debug_start + Vec2{0, -28}, debug_button_size, pivot=.center_center)
+	dura_hover, dura_pressed := raw_button(dura_rect)
+	if dura_pressed {
+		ctx.gs.debug_show_durability = !ctx.gs.debug_show_durability
+	}
+	dura_col := Vec4{0.05, 0.05, 0.05, 0.78}
+	if dura_hover {
+		dura_col = Vec4{0.2, 0.2, 0.2, 0.85}
+	}
+	draw_rect(dura_rect, col=dura_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	dura_label := ctx.gs.debug_show_durability ? "Durability: ON" : "Durability: OFF"
+	draw_text(dura_rect.xy, dura_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{})
 }
 
 app_shutdown :: proc() {
