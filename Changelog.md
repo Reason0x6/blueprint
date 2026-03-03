@@ -1,6 +1,10 @@
 # Changelog
 
-## [HEAD] Convert crafting to shape-based 2x3 slot recipes
+## [HEAD] Add stone_multitool item support so existing recipe resolves
+- Added `stone_multitool` to `Item_Kind` and token parsing so `stone_multitool:1` outputs in `crafting_recipes.txt` load correctly.
+- Added inventory/UI mappings (`item_name`, `item_icon_sprite`, `item_max_stack`) for the new item, using a stack size of `1`.
+
+## [3b72a9a] Convert crafting to shape-based 2x3 slot recipes
 - Replaced crafting recipe matching logic so recipes now match exact slot layout on the 2x3 crafting grid instead of aggregated item counts.
 - Updated crafting ingredient consumption to consume from the exact matched slots defined by each recipe pattern.
 - Switched `res/data/crafting_recipes.txt` to a shape format: `r0c0,r0c1 | r1c0,r1c1 | r2c0,r2c1 -> output`, with `_`/`.`/`empty` as empty-cell tokens.

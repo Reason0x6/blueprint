@@ -78,6 +78,7 @@ Item_Kind :: enum u8 {
 	stick,
 	rope,
 	stone_blade,
+	stone_multitool,
 	oblisk_fragment,
 	oblisk_core,
 	dagger_item,
@@ -529,6 +530,7 @@ item_kind_from_token :: proc(tok: string) -> (item: Item_Kind, ok: bool) #option
 	case "stick": return .stick, true
 	case "rope": return .rope, true
 	case "stone_blade": return .stone_blade, true
+	case "stone_multitool": return .stone_multitool, true
 	case "oblisk_fragment": return .oblisk_fragment, true
 	case "oblisk_core": return .oblisk_core, true
 	case "dagger_item": return .dagger_item, true
@@ -1241,6 +1243,7 @@ item_name :: proc(item: Item_Kind) -> string {
 	case .stick: return "Stick"
 	case .rope: return "Rope"
 	case .stone_blade: return "Stone Blade"
+	case .stone_multitool: return "Stone Multitool"
 	case .oblisk_fragment: return "Fragment"
 	case .oblisk_core: return "Core"
 	case .dagger_item: return "Dagger"
@@ -1257,6 +1260,7 @@ item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	case .stick: return .sticks
 	case .rope: return .rope
 	case .stone_blade: return .dagger_item
+	case .stone_multitool: return .stone
 	case .oblisk_fragment: return .oblisk_broken
 	case .oblisk_core: return .oblisk
 	case .dagger_item: return .dagger_item
@@ -1273,6 +1277,7 @@ item_max_stack :: proc(item: Item_Kind) -> int {
 	case .stick: return 99
 	case .rope: return 99
 	case .stone_blade: return 99
+	case .stone_multitool: return 1
 	case .oblisk_fragment: return 99
 	case .oblisk_core: return 10
 	case .dagger_item: return 1
