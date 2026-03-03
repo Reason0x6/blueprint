@@ -2014,7 +2014,7 @@ draw_inventory_ui :: proc() {
 		if equipped.item != .nil {
 			label = fmt.tprintf("Equipped: %v", item_name(equipped.item))
 		}
-		draw_text(Vec2{cx, by + 29}, label, pivot=.bottom_center, z_layer=.ui, col=Vec4{1, 1, 1, 0.8}, drop_shadow_col=Vec4{})
+		draw_text(Vec2{cx, by + 29}, label, pivot=.bottom_center, z_layer=.ui, col=Vec4{1, 1, 1, 0.8}, drop_shadow_col=Vec4{}, scale=0.4)
 	}
 
 	if !inv.open {

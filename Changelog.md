@@ -1,6 +1,9 @@
 # Changelog
 
-## [HEAD] Randomize repeating background texture and remove player tint filter
+## [HEAD] Reduce equipped item label size by 60 percent
+- Set the hotbar `Equipped:` UI label draw scale to `0.4`, making it 60% smaller than the previous default size.
+
+## [0a57857] Randomize repeating background texture and remove player tint filter
 - Added `forest_grass_texture` sprite support and random startup selection between `bg_repeat_tex0` and `forest_grass_texture`.
 - Background repeat UV assignment now uses the randomly selected sprite for the session.
 - Tuned forest grass selection chance to roughly `1 in 3` sessions.
