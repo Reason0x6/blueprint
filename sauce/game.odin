@@ -80,6 +80,8 @@ HOTBAR_SLOT_COUNT :: 6
 HOTBAR_SLOT_START :: INVENTORY_SLOT_COUNT - HOTBAR_SLOT_COUNT
 AUTO_PICKUP_RADIUS: f32 : 40
 DROP_OUTSIDE_PICKUP_RADIUS: f32 : AUTO_PICKUP_RADIUS + 6
+INTERACT_RANGE: f32 : 40
+PLACE_PREVIEW_RANGE: f32 : INTERACT_RANGE * 2
 ENTITY_GRID_SIZE: f32 : 32
 HITBOX_CORNER_CUT: f32 : 3
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
@@ -221,6 +223,9 @@ Entity :: struct {
 	has_queued_move_target: bool,
 	pending_interact: Entity_Handle,
 	has_pending_interact: bool,
+	pending_place_item: Item_Kind,
+	pending_place_pos: Vec2,
+	has_pending_place: bool,
 	
 	// this gets zeroed every frame. Useful for passing data to other systems.
 	scratch: struct {
@@ -937,11 +942,15 @@ game_update :: proc() {
 				set_player_move_target_with_detour(player, clicked_entity.pos)
 				player.pending_interact = clicked_entity.handle
 				player.has_pending_interact = true
+				player.has_pending_place = false
+				player.pending_place_item = .nil
 				spawn_movement_indicator(target)
 			} else if !is_world_position_blocked_for_player(target) {
 				set_player_move_target_with_detour(player, target)
 				player.has_pending_interact = false
 				player.pending_interact = {}
+				player.has_pending_place = false
+				player.pending_place_item = .nil
 				spawn_movement_indicator(target)
 			}
  		}
@@ -953,8 +962,8 @@ game_update :: proc() {
 
 		if is_hit_cooldown_ready() {
 			equipped_item, _ := get_equipped_item()
-			placed_sapling := try_place_equipped_sapling(pos)
-			if !placed_sapling {
+			began_place := try_begin_place_equipped_item(pos)
+			if !began_place {
 				did_hit, hit_handle := try_hit_entity_at_mouse(pos)
 				if did_hit {
 					ctx.gs.has_hold_hit_target = true
@@ -1017,6 +1026,7 @@ game_draw :: proc() {
 	{
 		push_coord_space(get_world_space())
 		draw_world_grid()
+		draw_placeable_preview()
 
 		draw_order := make([dynamic]Entity_Handle, 0, len(get_all_ents()), allocator=context.temp_allocator)
 		for handle in get_all_ents() {
@@ -1068,6 +1078,55 @@ game_draw :: proc() {
 
 		draw_player_hit_cooldown_bar()
 	}
+}
+
+get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, ok: bool) {
+	#partial switch item {
+	case .sapling:
+		return .sapling, true
+	case:
+		return .nil, false
+	}
+}
+
+draw_placeable_preview :: proc() {
+	if is_any_ui_overlay_open() {
+		return
+	}
+
+	player := get_player()
+	if !is_valid(player^) {
+		return
+	}
+
+	item, count := get_equipped_item()
+	if count <= 0 {
+		return
+	}
+
+	sprite, ok := get_placeable_preview_sprite(item)
+	if !ok {
+		return
+	}
+
+	mouse_world := mouse_pos_in_current_space()
+	_, hit_ok := find_hittable_entity_at_world_pos(mouse_world)
+	if hit_ok {
+		return
+	}
+
+	place_pos := snap_vec2_to_grid(mouse_world, ENTITY_GRID_SIZE)
+	diff := place_pos - player.pos
+	d2 := diff.x*diff.x + diff.y*diff.y
+	if d2 > PLACE_PREVIEW_RANGE*PLACE_PREVIEW_RANGE {
+		return
+	}
+
+	col := Vec4{1, 1, 1, 0.35}
+	if is_world_position_blocked_for_player(place_pos) {
+		col = Vec4{1, 0.25, 0.25, 0.28}
+	}
+	draw_sprite(place_pos, sprite, pivot=.center_center, col=col, z_layer=.vfx)
 }
 
 draw_world_grid :: proc() {
@@ -2293,7 +2352,29 @@ should_roll_bonus_sapling_drop :: proc(kind: Entity_Kind) -> bool {
 	}
 }
 
-try_place_equipped_sapling :: proc(mouse_world: Vec2) -> bool {
+get_place_approach_pos :: proc(player_pos: Vec2, place_pos: Vec2) -> Vec2 {
+	to_player := player_pos - place_pos
+	len_sq := to_player.x*to_player.x + to_player.y*to_player.y
+	if len_sq <= 0.0001 {
+		return place_pos + Vec2{INTERACT_RANGE - 2, 0}
+	}
+
+	to_player /= math.sqrt(len_sq)
+	return place_pos + to_player * (INTERACT_RANGE - 2)
+}
+
+place_entity_from_item :: proc(item: Item_Kind, pos: Vec2) -> bool {
+	#partial switch item {
+	case .sapling:
+		e := entity_create(.sapling_ent)
+		e.pos = pos
+		return true
+	case:
+		return false
+	}
+}
+
+try_begin_place_equipped_item :: proc(mouse_world: Vec2) -> bool {
 	item, count := get_equipped_item()
 	if item != .sapling || count <= 0 {
 		return false
@@ -2308,13 +2389,62 @@ try_place_equipped_sapling :: proc(mouse_world: Vec2) -> bool {
 	if is_world_position_blocked_for_player(place_pos) {
 		return false
 	}
-	if !consume_equipped_item(1) {
+
+	player := get_player()
+	if !is_valid(player^) {
 		return false
 	}
 
-	e := entity_create(.sapling_ent)
-	e.pos = place_pos
+	diff := place_pos - player.pos
+	d2 := diff.x*diff.x + diff.y*diff.y
+	if d2 <= INTERACT_RANGE*INTERACT_RANGE {
+		if !consume_equipped_item(1) {
+			return false
+		}
+		return place_entity_from_item(item, place_pos)
+	}
+
+	player.pending_place_item = item
+	player.pending_place_pos = place_pos
+	player.has_pending_place = true
+
+	approach := get_place_approach_pos(player.pos, place_pos)
+	set_player_move_target_with_detour(player, approach)
 	return true
+}
+
+try_place_pending_item :: proc(player: ^Entity) {
+	if !player.has_pending_place {
+		return
+	}
+
+	diff := player.pending_place_pos - player.pos
+	d2 := diff.x*diff.x + diff.y*diff.y
+	if d2 > INTERACT_RANGE*INTERACT_RANGE {
+		return
+	}
+	if is_world_position_blocked_for_player(player.pending_place_pos) {
+		player.has_pending_place = false
+		player.pending_place_item = .nil
+		return
+	}
+	_, hit_ok := find_hittable_entity_at_world_pos(player.pending_place_pos)
+	if hit_ok {
+		player.has_pending_place = false
+		player.pending_place_item = .nil
+		return
+	}
+
+	item := player.pending_place_item
+	if !consume_equipped_item(1) {
+		player.has_pending_place = false
+		player.pending_place_item = .nil
+		return
+	}
+
+	_ = place_entity_from_item(item, player.pending_place_pos)
+	player.has_pending_place = false
+	player.pending_place_item = .nil
 }
 
 spawn_movement_indicator :: proc(pos: Vec2) -> ^Entity {
@@ -2510,7 +2640,7 @@ can_player_interact_entity :: proc(player: ^Entity, target: ^Entity) -> bool {
 
 	diff := player.pos - target.pos
 	dist_sq := diff.x*diff.x + diff.y*diff.y
-	return dist_sq <= 40*40
+	return dist_sq <= INTERACT_RANGE*INTERACT_RANGE
 }
 
 interact_entity :: proc(player: ^Entity, target: ^Entity) -> bool {
@@ -2876,6 +3006,8 @@ setup_player :: proc(e: ^Entity) {
 				e.queued_move_target = {}
 				e.has_pending_interact = false
 				e.pending_interact = {}
+				e.has_pending_place = false
+				e.pending_place_item = .nil
 				e.pos += move_dir * 100.0 * ctx.delta_t
 			} else if e.has_move_target {
 				to_target := e.move_target - e.pos
@@ -2913,6 +3045,7 @@ setup_player :: proc(e: ^Entity) {
 				}
 			}
 		}
+		try_place_pending_item(e)
 
 		if move_dir.x != 0 {
 			e.last_known_x_dir = move_dir.x
@@ -2988,7 +3121,7 @@ setup_item_pickup :: proc(using e: ^Entity) {
 		phase := f32(now()) * 3.0 + f32(e.handle.id) * 0.31
 		bob_y := math.sin(phase) * 1.5
 		bob_pos := e.pos + Vec2{0, bob_y}
-		xform := utils.xform_scale(Vec2{0.55, 0.55})
+		xform := utils.xform_scale(Vec2{0.62, 0.62})
 		draw_sprite_entity(&e0, bob_pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot)
 
 		if e.pickup_count > 1 {
@@ -3116,7 +3249,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 		player := get_player()
 		diff := player.pos - e.pos
 		dist_sq := diff.x*diff.x + diff.y*diff.y
-		if dist_sq <= 40*40 {
+		if dist_sq <= INTERACT_RANGE*INTERACT_RANGE {
 			draw_text(e.pos + Vec2{0, 14}, "Press E", pivot=.bottom_center, col={1, 1, 1, 0.75}, drop_shadow_col={0, 0, 0, 0.35})
 		}
 	}

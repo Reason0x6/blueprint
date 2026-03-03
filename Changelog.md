@@ -2,9 +2,11 @@
 
 ## [HEAD] Add modal UI overlay gating plus sapling placement, break bonus drops, and visible large grid
 - Added generic UI overlay gating (`is_any_ui_overlay_open`) so movement, hitting, right-click use, and interaction pause while any overlay is open, plus `Esc` close-all overlay behavior.
-- Added `sapling` as an item kind and left-click placement flow: with sapling equipped, clicking empty valid world space places a `sapling_ent`.
+- Added `sapling` as an item kind and placement flow: with sapling equipped, clicking empty valid world space now makes the player move into range and then place a `sapling_ent`.
+- Added low-opacity placeable hover preview for equipped placeables, visible within `2x` interaction range.
 - Breaking `tree_ent`, `sapling_ent`, and `sprout_ent` now drops their configured break drops plus a random `0..1` bonus sapling item.
 - Increased world entity grid size and added world grid rendering so the larger placement grid is visible.
+- Increased floating pickup item draw scale slightly.
 - Fixed `UI_OVERLAY_INVENTORY` constant declaration syntax.
 
 ## [13c610c] Merge crafting output into matching held stack on left click
