@@ -145,6 +145,8 @@ Entity :: struct {
 	distance_travelled: f32,
 	move_target: Vec2,
 	has_move_target: bool,
+	queued_move_target: Vec2,
+	has_queued_move_target: bool,
 	pending_interact: Entity_Handle,
 	has_pending_interact: bool,
 	
@@ -603,14 +605,12 @@ game_update :: proc() {
 			target := mouse_pos_in_current_space()
 			clicked_entity, clicked_entity_ok := find_entity_at_world_pos(target)
 			if clicked_entity_ok {
-				player.move_target = clicked_entity.pos
-				player.has_move_target = true
+				set_player_move_target_with_detour(player, clicked_entity.pos)
 				player.pending_interact = clicked_entity.handle
 				player.has_pending_interact = true
 				spawn_movement_indicator(target)
 			} else if !is_world_position_blocked_for_player(target) {
-				player.move_target = target
-				player.has_move_target = true
+				set_player_move_target_with_detour(player, target)
 				player.has_pending_interact = false
 				player.pending_interact = {}
 				spawn_movement_indicator(target)
@@ -869,6 +869,8 @@ resolve_player_vs_hitboxes :: proc() {
 
 		if collided_any {
 			player.has_move_target = false
+			player.has_queued_move_target = false
+			player.queued_move_target = {}
 		}
 
 		if !collided_any do break
@@ -1328,6 +1330,76 @@ find_entity_at_world_pos :: proc(pos: Vec2) -> (^Entity, bool) {
 	return best, best != nil
 }
 
+get_nearby_blocker_hitbox :: proc(player_pos: Vec2, within_px: f32) -> (shape.Rect, bool) {
+	best_dist := within_px + 0.001
+	best := shape.Rect{}
+	found := false
+
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		if !is_valid(e^) do continue
+		if !e.blocks_player do continue
+
+		hitbox, ok := get_entity_hitbox_rect(e^)
+		if !ok do continue
+
+		closest_x := math.clamp(player_pos.x, hitbox.x, hitbox.z)
+		closest_y := math.clamp(player_pos.y, hitbox.y, hitbox.w)
+		dx := player_pos.x - closest_x
+		dy := player_pos.y - closest_y
+		dist := math.sqrt(dx*dx + dy*dy)
+		if dist <= within_px && dist < best_dist {
+			best_dist = dist
+			best = hitbox
+			found = true
+		}
+	}
+
+	return best, found
+}
+
+compute_detour_around_hitbox :: proc(player_pos: Vec2, final_target: Vec2, blocker: shape.Rect) -> Vec2 {
+	margin: f32 = 8
+	center := (blocker.xy + blocker.zw) * 0.5
+	to_target := final_target - center
+
+	detour := player_pos
+	if math.abs(to_target.x) >= math.abs(to_target.y) {
+		detour.x = blocker.z + margin if to_target.x >= 0 else blocker.x - margin
+		detour.y = math.clamp(player_pos.y, blocker.y - margin, blocker.w + margin)
+	} else {
+		detour.y = blocker.w + margin if to_target.y >= 0 else blocker.y - margin
+		detour.x = math.clamp(player_pos.x, blocker.x - margin, blocker.z + margin)
+	}
+
+	// Avoid degenerate tiny moves.
+	if linalg.length(detour-player_pos) < 1.0 {
+		detour.x += margin
+	}
+
+	return detour
+}
+
+set_player_move_target_with_detour :: proc(player: ^Entity, target: Vec2) {
+	player.queued_move_target = {}
+	player.has_queued_move_target = false
+
+	blocker, near_blocker := get_nearby_blocker_hitbox(player.pos, 10)
+	if near_blocker {
+		detour := compute_detour_around_hitbox(player.pos, target, blocker)
+		if !is_world_position_blocked_for_player(detour) {
+			player.move_target = detour
+			player.has_move_target = true
+			player.queued_move_target = target
+			player.has_queued_move_target = true
+			return
+		}
+	}
+
+	player.move_target = target
+	player.has_move_target = true
+}
+
 is_world_position_blocked_for_player :: proc(pos: Vec2) -> bool {
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
@@ -1507,6 +1579,8 @@ setup_player :: proc(e: ^Entity) {
 		move_dir := get_input_vector()
 		if move_dir != {} {
 			e.has_move_target = false
+			e.has_queued_move_target = false
+			e.queued_move_target = {}
 			e.has_pending_interact = false
 			e.pending_interact = {}
 			e.pos += move_dir * 100.0 * ctx.delta_t
@@ -1515,8 +1589,15 @@ setup_player :: proc(e: ^Entity) {
 			dist_sq := to_target.x*to_target.x + to_target.y*to_target.y
 			if dist_sq <= 2.0*2.0 {
 				e.pos = e.move_target
-				e.has_move_target = false
-				try_interact_pending_target(e)
+				if e.has_queued_move_target {
+					e.move_target = e.queued_move_target
+					e.has_move_target = true
+					e.has_queued_move_target = false
+					e.queued_move_target = {}
+				} else {
+					e.has_move_target = false
+					try_interact_pending_target(e)
+				}
 			} else {
 				dist := math.sqrt(dist_sq)
 				move_dir = to_target / dist
@@ -1524,8 +1605,15 @@ setup_player :: proc(e: ^Entity) {
 				step_len := linalg.length(move_step)
 				if step_len > dist {
 					e.pos = e.move_target
-					e.has_move_target = false
-					try_interact_pending_target(e)
+					if e.has_queued_move_target {
+						e.move_target = e.queued_move_target
+						e.has_move_target = true
+						e.has_queued_move_target = false
+						e.queued_move_target = {}
+					} else {
+						e.has_move_target = false
+						try_interact_pending_target(e)
+					}
 				} else {
 					e.pos += move_step
 				}
