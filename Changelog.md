@@ -41,6 +41,8 @@
 - Updated per-chunk random structure placement to choose its `15x15` inner spawn zone from unlocked-overlapping chunk regions, so structures can spawn into currently revealable space instead of being hidden entirely in locked tiles.
 - Player startup spawn now resolves to the nearest non-overlapping position around the intended center, avoiding terrain/entity hitbox overlap while staying as close to bucket middle as possible.
 - `manual_spawn_world_pos` now validates collision overlap and searches outward to the nearest clear grid position before returning, so manual spawns auto-shift until they no longer overlap hitboxes.
+- Strengthened manual/player startup spawning to use full hitbox-overlap checks (terrain + entity hitboxes) via `manual_spawn_world_pos_for_hitbox`, and applied explicit hitbox sizes for startup entity placements.
+- Fixed startup spawn resolution edge case where locked-area checks blocked all candidates before the first area unlock by treating lock checks as inactive until at least one world area is unlocked.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

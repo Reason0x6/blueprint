@@ -1339,17 +1339,17 @@ game_update :: proc() {
 		ctx.gs.debug_show_grid = false
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
 		ctx.gs.unlocked_world_areas = make([dynamic]u64, 0, 64, allocator=context.allocator)
-		player.pos = find_player_spawn_pos_near_middle(player, manual_spawn_world_pos(Vec2{0, 0}))
+		player.pos = manual_spawn_world_pos_for_hitbox(Vec2{0, 0}, Vec2{8, 8}, .bottom_center)
 		_ = unlock_world_area_for_world_pos(player.pos)
 
 		oblisk := entity_create(.oblisk_ent)
-		oblisk.pos = manual_spawn_world_pos(Vec2{64, 0})
+		oblisk.pos = manual_spawn_world_pos_for_hitbox(Vec2{64, 0}, Vec2{40, 40}, .bottom_center)
 		tree := entity_create(.tree_ent)
-		tree.pos = manual_spawn_world_pos(Vec2{26, 0})
+		tree.pos = manual_spawn_world_pos_for_hitbox(Vec2{26, 0}, Vec2{50, 30}, .bottom_center)
 		sapling := entity_create(.sapling_ent)
-		sapling.pos = manual_spawn_world_pos(Vec2{-40, 0})
+		sapling.pos = manual_spawn_world_pos_for_hitbox(Vec2{-40, 0}, Vec2{18, 13}, .bottom_center)
 		sprout := entity_create(.sprout_ent)
-		sprout.pos = manual_spawn_world_pos(Vec2{-80, 0})
+		sprout.pos = manual_spawn_world_pos_for_hitbox(Vec2{-80, 0}, Vec2{15, 10}, .bottom_center)
 
 		spawn_item_pickup(.wood, 4, manual_spawn_world_pos(Vec2{-68, 8}))
 		spawn_item_pickup(.stone, 3, manual_spawn_world_pos(Vec2{-86, 8}))
@@ -1672,12 +1672,18 @@ is_tile_in_unlocked_world :: proc(tile_x: int, tile_y: int) -> bool {
 }
 
 is_world_pos_in_locked_area :: proc(pos: Vec2) -> bool {
+	if len(ctx.gs.unlocked_world_areas) == 0 {
+		return false
+	}
 	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
 	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
 	return !is_tile_in_unlocked_world(tile_x, tile_y)
 }
 
 is_rect_touching_locked_world_area :: proc(rect: shape.Rect) -> bool {
+	if len(ctx.gs.unlocked_world_areas) == 0 {
+		return false
+	}
 	min_tile_x := int(math.floor(rect.x / ENTITY_GRID_SIZE))
 	max_tile_x := int(math.floor(rect.z / ENTITY_GRID_SIZE))
 	min_tile_y := int(math.floor(rect.y / ENTITY_GRID_SIZE))
@@ -1699,8 +1705,8 @@ manual_spawn_origin_offset :: proc() -> Vec2 {
 	return Vec2{off, off}
 }
 
-is_manual_spawn_point_overlapping_hitbox :: proc(pos: Vec2) -> bool {
-	if is_world_pos_in_water_collision(pos) || is_world_pos_in_terrain_block_collision(pos) {
+is_spawn_hitbox_overlapping :: proc(rect: shape.Rect) -> bool {
+	if is_rect_touching_locked_world_area(rect) || is_rect_touching_water_collision(rect) || is_rect_touching_terrain_block_collision(rect) {
 		return true
 	}
 
@@ -1710,15 +1716,16 @@ is_manual_spawn_point_overlapping_hitbox :: proc(pos: Vec2) -> bool {
 		if !ok {
 			continue
 		}
-		if shape.rect_contains(hitbox, pos) {
+		hit, _ := rounded_hitbox_collide_rect(rect, hitbox, HITBOX_CORNER_CUT)
+		if hit {
 			return true
 		}
 	}
 	return false
 }
 
-find_clear_manual_spawn_pos :: proc(desired: Vec2) -> Vec2 {
-	if !is_manual_spawn_point_overlapping_hitbox(desired) {
+find_clear_manual_spawn_pos_for_hitbox :: proc(desired: Vec2, hitbox_size: Vec2, hitbox_pivot: utils.Pivot) -> Vec2 {
+	if !is_spawn_hitbox_overlapping(shape.rect_make(desired, hitbox_size, pivot=hitbox_pivot)) {
 		return desired
 	}
 
@@ -1736,7 +1743,7 @@ find_clear_manual_spawn_pos :: proc(desired: Vec2) -> Vec2 {
 				}
 
 				candidate := desired + Vec2{f32(ox) * grid, f32(oy) * grid}
-				if is_manual_spawn_point_overlapping_hitbox(candidate) {
+				if is_spawn_hitbox_overlapping(shape.rect_make(candidate, hitbox_size, pivot=hitbox_pivot)) {
 					continue
 				}
 
@@ -1758,9 +1765,14 @@ find_clear_manual_spawn_pos :: proc(desired: Vec2) -> Vec2 {
 	return desired
 }
 
-manual_spawn_world_pos :: proc(pos: Vec2) -> Vec2 {
+manual_spawn_world_pos_for_hitbox :: proc(pos: Vec2, hitbox_size: Vec2, hitbox_pivot: utils.Pivot) -> Vec2 {
 	desired := pos + manual_spawn_origin_offset()
-	return find_clear_manual_spawn_pos(desired)
+	return find_clear_manual_spawn_pos_for_hitbox(desired, hitbox_size, hitbox_pivot)
+}
+
+manual_spawn_world_pos :: proc(pos: Vec2) -> Vec2 {
+	// Default to player-footprint spawn resolution for generic manual placements.
+	return manual_spawn_world_pos_for_hitbox(pos, Vec2{8, 8}, .bottom_center)
 }
 
 is_chunk_in_unlocked_world :: proc(chunk_x: int, chunk_y: int) -> bool {
