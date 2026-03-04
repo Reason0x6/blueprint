@@ -3017,6 +3017,9 @@ draw_terrain_water_tile_sprite :: proc(sprite: Sprite_Name, tile_center: Vec2, t
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {
 	#partial switch e.kind {
+	case .player:
+		// Player feet anchor is entity position; use this directly for stable depth sorting.
+		return e.pos.y
 	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
 		// Bush source sheets include large transparent padding below the visible base.
 		// Use the entity anchor as the depth "feet" so crossing the bush base flips order predictably.
