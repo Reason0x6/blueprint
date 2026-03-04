@@ -1164,7 +1164,10 @@ load_sprite_frame_meta :: proc() {
 		if sort_foot_ok {
 			sort_foot_y, sort_foot_parse_ok := parse_simple_f32(sort_foot_text)
 			if sort_foot_parse_ok {
-				sprite_sort_foot_y[sprite] = sort_foot_y
+				size := get_sprite_size(sprite)
+				// Meta is stored in image top-origin coordinates; convert to local bottom-origin.
+				local_from_bottom := (size.y - 1) - sort_foot_y
+				sprite_sort_foot_y[sprite] = max(0.0, local_from_bottom)
 				sprite_sort_foot_y_valid[sprite] = true
 			}
 		}
@@ -3029,7 +3032,7 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 	hitbox, ok := get_entity_hitbox_rect(e)
 	if ok {
 		// Bottom edge of hitbox is the "feet" depth key.
-		return hitbox.w
+		return hitbox.y
 	}
 	return e.pos.y
 }
