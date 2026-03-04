@@ -3035,9 +3035,8 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 		// Player feet anchor is entity position; use this directly for stable depth sorting.
 		return e.pos.y
 	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
-		// Bush source sheets include large transparent padding below the visible base.
-		// Use the entity anchor as the depth "feet" so crossing the bush base flips order predictably.
-		return e.pos.y
+		// Bush source sheets include large transparent bottom padding; visible base sits ~32px above anchor.
+		return e.pos.y + 32
 	}
 
 	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
@@ -3066,7 +3065,7 @@ get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
 	case .player:
 		return e.pos
 	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
-		return e.pos
+		return e.pos + Vec2{0, 32}
 	}
 
 	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
@@ -3197,8 +3196,11 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		return shape.rect_make(e.pos , Vec2{18, 13}, pivot=.bottom_center), true
 	case .sprout_ent:
 		return shape.rect_make(e.pos , Vec2{15, 10}, pivot=.bottom_center), true
-	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+	case .bush_1_ent, .bush_3_ent, .bush_4_ent:
 		center := e.pos + Vec2{0, 24}
+		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true
+	case .bush_2_ent:
+		center := e.pos + Vec2{0, 30}
 		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
