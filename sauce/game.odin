@@ -155,6 +155,7 @@ MAX_TERRAIN_STRUCTURES :: 64
 MAX_TERRAIN_STRUCTURE_ROWS :: 64
 MAX_TERRAIN_STRUCTURE_COLS :: 64
 WORLD_UNLOCK_AREA_SIZE_TILES :: 16
+WORLD_UNLOCK_CAMERA_EDGE_MARGIN_TILES: f32 : 1.5
 
 Drag_From_Kind :: enum u8 {
 	none,
@@ -1440,7 +1441,7 @@ game_update :: proc() {
 	}
 	update_hold_hit_cycle()
 
-	utils.animate_to_target_v2(&ctx.gs.cam_pos, get_player().pos, ctx.delta_t, rate=10)
+	utils.animate_to_target_v2(&ctx.gs.cam_pos, get_follow_camera_target(get_player().pos), ctx.delta_t, rate=10)
 
 	// ... add whatever other systems you need here to make epic game
 }
@@ -1616,6 +1617,12 @@ make_world_area_key :: proc(area_x: int, area_y: int) -> u64 {
 	return (ux << 32) | uy
 }
 
+world_area_coords_from_key :: proc(key: u64) -> (int, int) {
+	ax := int(i32((key >> 32) & 0xFFFF_FFFF))
+	ay := int(i32(key & 0xFFFF_FFFF))
+	return ax, ay
+}
+
 world_area_coord_for_tile :: proc(tile_coord: int) -> int {
 	half := WORLD_UNLOCK_AREA_SIZE_TILES / 2
 	return floor_div_int(tile_coord+half, WORLD_UNLOCK_AREA_SIZE_TILES)
@@ -1705,6 +1712,69 @@ is_chunk_in_unlocked_world :: proc(chunk_x: int, chunk_y: int) -> bool {
 		}
 	}
 	return false
+}
+
+get_unlocked_world_tile_bounds :: proc() -> (min_tile_x: int, min_tile_y: int, max_tile_x: int, max_tile_y: int, ok: bool) {
+	if len(ctx.gs.unlocked_world_areas) == 0 {
+		return 0, 0, 0, 0, false
+	}
+
+	half := WORLD_UNLOCK_AREA_SIZE_TILES / 2
+	first := true
+	for key in ctx.gs.unlocked_world_areas {
+		ax, ay := world_area_coords_from_key(key)
+		area_min_x := ax*WORLD_UNLOCK_AREA_SIZE_TILES - half
+		area_min_y := ay*WORLD_UNLOCK_AREA_SIZE_TILES - half
+		area_max_x := area_min_x + WORLD_UNLOCK_AREA_SIZE_TILES - 1
+		area_max_y := area_min_y + WORLD_UNLOCK_AREA_SIZE_TILES - 1
+
+		if first {
+			min_tile_x = area_min_x
+			min_tile_y = area_min_y
+			max_tile_x = area_max_x
+			max_tile_y = area_max_y
+			first = false
+		} else {
+			if area_min_x < min_tile_x do min_tile_x = area_min_x
+			if area_min_y < min_tile_y do min_tile_y = area_min_y
+			if area_max_x > max_tile_x do max_tile_x = area_max_x
+			if area_max_y > max_tile_y do max_tile_y = area_max_y
+		}
+	}
+	return min_tile_x, min_tile_y, max_tile_x, max_tile_y, true
+}
+
+get_follow_camera_target :: proc(player_pos: Vec2) -> Vec2 {
+	min_tx, min_ty, max_tx, max_ty, ok := get_unlocked_world_tile_bounds()
+	if !ok {
+		return player_pos
+	}
+
+	min_world := Vec2{f32(min_tx) * ENTITY_GRID_SIZE, f32(min_ty) * ENTITY_GRID_SIZE}
+	max_world := Vec2{f32(max_tx+1) * ENTITY_GRID_SIZE, f32(max_ty+1) * ENTITY_GRID_SIZE}
+
+	zoom := max(0.0001, get_camera_zoom())
+	half_view_w := (f32(window_w) * 0.5) / zoom
+	half_view_h := (f32(window_h) * 0.5) / zoom
+	margin := WORLD_UNLOCK_CAMERA_EDGE_MARGIN_TILES * ENTITY_GRID_SIZE
+
+	min_cam_x := min_world.x + half_view_w - margin
+	max_cam_x := max_world.x - half_view_w + margin
+	min_cam_y := min_world.y + half_view_h - margin
+	max_cam_y := max_world.y - half_view_h + margin
+
+	target := player_pos
+	if min_cam_x > max_cam_x {
+		target.x = (min_world.x + max_world.x) * 0.5
+	} else {
+		target.x = math.clamp(target.x, min_cam_x, max_cam_x)
+	}
+	if min_cam_y > max_cam_y {
+		target.y = (min_world.y + max_world.y) * 0.5
+	} else {
+		target.y = math.clamp(target.y, min_cam_y, max_cam_y)
+	}
+	return target
 }
 
 sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
