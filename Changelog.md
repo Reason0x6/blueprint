@@ -15,6 +15,8 @@
 - Terrain block collision now supports multiple hitboxes per block index via `add_terrain_block_hitbox`, while `set_terrain_block_hitbox` remains as a clear-and-set helper for single-box cases.
 - Updated terrain block point, rect, and debug collision paths to evaluate/draw all configured hitboxes for the block tile instead of only one.
 - Synced all currently pending workspace changes (code, terrain data, and image/tileset asset updates) into a single commit.
+- Terrain structure tokens now support water variants: `water_1..water_4`, with numeric aliases `0 -> water_1`, `-1 -> water_2`, `-2 -> water_3`, `-3 -> water_4`.
+- Water terrain rendering now selects per-tile variant sprites, and water collision/debug mask logic now reads per-variant masks (`water_1.png..water_4.png`) with fallback to variant 1/legacy `water.png`.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

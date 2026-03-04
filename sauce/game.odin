@@ -179,6 +179,7 @@ Terrain_Tile_Kind :: enum u8 {
 Terrain_Tile :: struct {
 	kind: Terrain_Tile_Kind,
 	block_index: int,
+	water_variant: int,
 }
 
 Terrain_Structure :: struct {
@@ -201,7 +202,8 @@ Water_Collision_Mask :: struct {
 	height: int,
 	alpha: [dynamic]u8,
 }
-water_collision_mask: Water_Collision_Mask
+MAX_WATER_VARIANTS :: 4
+water_collision_masks: [MAX_WATER_VARIANTS+1]Water_Collision_Mask
 
 Terrain_Block_Hitbox :: struct {
 	offset: Vec2,
@@ -374,6 +376,10 @@ Sprite_Name :: enum {
 	ruins_bg_tile,
 	grass,
 	water,
+	water_1,
+	water_2,
+	water_3,
+	water_4,
 	dagger_item,
 	dagger_item_flying,
 	movement_indicator,
@@ -649,6 +655,33 @@ parse_positive_int_str :: proc(s: string) -> (v: int, ok: bool) #optional_ok {
 	return value, true
 }
 
+parse_signed_int_str :: proc(s: string) -> (v: int, ok: bool) #optional_ok {
+	ss := trim_ascii_ws(s)
+	if len(ss) == 0 {
+		return 0, false
+	}
+
+	sign := 1
+	start := 0
+	if ss[0] == '-' {
+		sign = -1
+		start = 1
+	}
+	if start >= len(ss) {
+		return 0, false
+	}
+
+	value := 0
+	for i := start; i < len(ss); i += 1 {
+		c := ss[i]
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		value = value*10 + int(c-'0')
+	}
+	return value * sign, true
+}
+
 item_kind_from_token :: proc(tok: string) -> (item: Item_Kind, ok: bool) #optional_ok {
 	t := trim_ascii_ws(tok)
 	switch t {
@@ -829,11 +862,25 @@ parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 		}
 	}
 
-	if t == "water" || t == "0" {
-		return Terrain_Tile{kind=.water}, true
+	if t == "water" || t == "water_1" || t == "0" {
+		return Terrain_Tile{kind=.water, water_variant=1}, true
+	}
+	if t == "water_2" || t == "-1" {
+		return Terrain_Tile{kind=.water, water_variant=2}, true
+	}
+	if t == "water_3" || t == "-2" {
+		return Terrain_Tile{kind=.water, water_variant=3}, true
+	}
+	if t == "water_4" || t == "-3" {
+		return Terrain_Tile{kind=.water, water_variant=4}, true
 	}
 	if t == "_" || t == "." || t == "empty" {
 		return Terrain_Tile{kind=.empty}, true
+	}
+
+	signed, signed_ok := parse_signed_int_str(t)
+	if signed_ok && signed <= 0 && signed >= -3 {
+		return Terrain_Tile{kind=.water, water_variant=1-signed}, true
 	}
 
 	block_index, ok := parse_positive_int_str(t)
@@ -958,34 +1005,74 @@ load_terrain_structures :: proc() {
 	}
 }
 
-load_water_collision_mask :: proc() {
-	water_collision_mask = {}
+water_sprite_for_variant :: proc(variant: int) -> Sprite_Name {
+	switch variant {
+	case 2: return .water_2
+	case 3: return .water_3
+	case 4: return .water_4
+	case:
+		// Prefer explicit water_1 if present, otherwise legacy water.png.
+		return .water_1 if sprite_is_loaded(.water_1) else .water
+	}
+}
 
-	path := "res/images/water.png"
+water_mask_for_variant :: proc(variant: int) -> ^Water_Collision_Mask {
+	v := clamp(variant, 1, MAX_WATER_VARIANTS)
+	mask := &water_collision_masks[v]
+	if mask.width > 0 && mask.height > 0 && len(mask.alpha) > 0 {
+		return mask
+	}
+	fallback := &water_collision_masks[1]
+	if fallback.width > 0 && fallback.height > 0 && len(fallback.alpha) > 0 {
+		return fallback
+	}
+	return mask
+}
+
+load_one_water_collision_mask :: proc(variant: int, path: string) -> bool {
+	if variant < 1 || variant > MAX_WATER_VARIANTS {
+		return false
+	}
+
+	water_collision_masks[variant] = {}
 	png_data, png_err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if png_err != nil || len(png_data) == 0 {
-		log.warnf("water collision mask missing %q; using full-tile water collision fallback", path)
-		return
+		return false
 	}
 
 	stbi.set_flip_vertically_on_load(1)
 	width, height, channels: i32
 	img_data := stbi.load_from_memory(raw_data(png_data), auto_cast len(png_data), &width, &height, &channels, 4)
 	if img_data == nil || width <= 0 || height <= 0 {
-		log.warn("failed to decode water.png for collision mask; using full-tile fallback")
-		return
+		return false
 	}
 	defer stbi.image_free(img_data)
 
 	alpha := make([dynamic]u8, 0, int(width)*int(height), allocator=context.allocator)
 	for i in 0..<int(width)*int(height) {
-		a := img_data[i*4 + 3]
-		append(&alpha, a)
+		append(&alpha, img_data[i*4 + 3])
 	}
 
-	water_collision_mask.width = int(width)
-	water_collision_mask.height = int(height)
-	water_collision_mask.alpha = alpha
+	water_collision_masks[variant].width = int(width)
+	water_collision_masks[variant].height = int(height)
+	water_collision_masks[variant].alpha = alpha
+	return true
+}
+
+load_water_collision_masks :: proc() {
+	for i in 0..=MAX_WATER_VARIANTS {
+		water_collision_masks[i] = {}
+	}
+
+	if !load_one_water_collision_mask(1, "res/images/water_1.png") {
+		if !load_one_water_collision_mask(1, "res/images/water.png") {
+			log.warn("water collision mask missing water_1.png/water.png; using full-tile water collision fallback")
+		}
+	}
+	for variant in 2..=MAX_WATER_VARIANTS {
+		path := fmt.tprintf("res/images/water_%v.png", variant)
+		_ = load_one_water_collision_mask(variant, path)
+	}
 }
 
 load_sprite_frame_meta :: proc() {
@@ -1058,7 +1145,7 @@ app_init :: proc() {
 	load_sprite_frame_meta()
 	load_crafting_recipes()
 	load_terrain_structures()
-	load_water_collision_mask()
+	load_water_collision_masks()
 	setup_terrain_block_hitboxes()
 }
 
@@ -1691,8 +1778,10 @@ is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> boo
 		return false
 	}
 
+	mask := water_mask_for_variant(tile.water_variant)
+
 	// Fallback if mask is missing: water tile is fully blocked.
-	if water_collision_mask.width <= 0 || water_collision_mask.height <= 0 || len(water_collision_mask.alpha) == 0 {
+	if mask.width <= 0 || mask.height <= 0 || len(mask.alpha) == 0 {
 		return true
 	}
 
@@ -1701,14 +1790,14 @@ is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> boo
 	u := math.clamp((world_pos.x-tile_min_x)/grid, 0, 0.9999)
 	v := math.clamp((world_pos.y-tile_min_y)/grid, 0, 0.9999)
 
-	px := clamp(int(math.floor(u * f32(water_collision_mask.width))), 0, water_collision_mask.width-1)
-	py := clamp(int(math.floor(v * f32(water_collision_mask.height))), 0, water_collision_mask.height-1)
-	idx := py*water_collision_mask.width + px
-	if idx < 0 || idx >= len(water_collision_mask.alpha) {
+	px := clamp(int(math.floor(u * f32(mask.width))), 0, mask.width-1)
+	py := clamp(int(math.floor(v * f32(mask.height))), 0, mask.height-1)
+	idx := py*mask.width + px
+	if idx < 0 || idx >= len(mask.alpha) {
 		return true
 	}
 
-	return water_collision_mask.alpha[idx] > 0
+	return mask.alpha[idx] > 0
 }
 
 is_water_pixel_blocked_oversized :: proc(tile_x: int, tile_y: int, world_pos: Vec2, oversize_px: f32) -> bool {
@@ -1798,29 +1887,6 @@ draw_water_collision_debug :: proc() {
 	max_tile_x := int(math.ceil((center.x + half_w) / tile_size.x))
 	min_tile_y := int(math.floor((center.y - half_h) / tile_size.y))
 	max_tile_y := int(math.ceil((center.y + half_h) / tile_size.y))
-	mask_w := water_collision_mask.width
-	mask_h := water_collision_mask.height
-	has_mask := mask_w > 0 && mask_h > 0 && len(water_collision_mask.alpha) >= mask_w*mask_h
-	opaque_min_x := mask_w
-	opaque_min_y := mask_h
-	opaque_max_x := -1
-	opaque_max_y := -1
-	if has_mask {
-		for py in 0..<mask_h {
-			for px in 0..<mask_w {
-				idx := py*mask_w + px
-				if water_collision_mask.alpha[idx] == 0 do continue
-				if px < opaque_min_x do opaque_min_x = px
-				if py < opaque_min_y do opaque_min_y = py
-				if px > opaque_max_x do opaque_max_x = px
-				if py > opaque_max_y do opaque_max_y = py
-			}
-		}
-		if opaque_max_x < opaque_min_x || opaque_max_y < opaque_min_y {
-			has_mask = false
-		}
-	}
-
 	ty := min_tile_y
 	layer: ZLayer = .top
 	if is_game_paused() {
@@ -1833,6 +1899,30 @@ draw_water_collision_debug :: proc() {
 			if tile.kind != .water {
 				tx += 1
 				continue
+			}
+
+			mask := water_mask_for_variant(tile.water_variant)
+			mask_w := mask.width
+			mask_h := mask.height
+			has_mask := mask_w > 0 && mask_h > 0 && len(mask.alpha) >= mask_w*mask_h
+			opaque_min_x := mask_w
+			opaque_min_y := mask_h
+			opaque_max_x := -1
+			opaque_max_y := -1
+			if has_mask {
+				for py in 0..<mask_h {
+					for px in 0..<mask_w {
+						idx := py*mask_w + px
+						if mask.alpha[idx] == 0 do continue
+						if px < opaque_min_x do opaque_min_x = px
+						if py < opaque_min_y do opaque_min_y = py
+						if px > opaque_max_x do opaque_max_x = px
+						if py > opaque_max_y do opaque_max_y = py
+					}
+				}
+				if opaque_max_x < opaque_min_x || opaque_max_y < opaque_min_y {
+					has_mask = false
+				}
 			}
 
 			tile_min_x := f32(tx) * ENTITY_GRID_SIZE
@@ -2101,10 +2191,14 @@ draw_world_terrain_tiles :: proc() {
 			tile := terrain_tile_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
+			water_sprite := water_sprite_for_variant(tile.water_variant)
+			if !sprite_is_loaded(water_sprite) {
+				water_sprite = water_sprite_for_variant(1)
+			}
 			// Water underlay for non-water tiles so transparent pixels reveal water below.
 			if tile.kind != .water {
-				if sprite_is_loaded(.water) {
-					draw_sprite_in_rect(.water, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+				if sprite_is_loaded(water_sprite) {
+					draw_sprite_in_rect(water_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
 				} else {
 					draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
 				}
@@ -2113,8 +2207,8 @@ draw_world_terrain_tiles :: proc() {
 			}
 
 			if tile.kind == .water {
-				if sprite_is_loaded(.water) {
-					draw_sprite_in_rect(.water, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+				if sprite_is_loaded(water_sprite) {
+					draw_sprite_in_rect(water_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
 				}
 			} else if tile.kind == .block {
 				if sprite_is_loaded(.tilemap_color1) {
@@ -2122,7 +2216,7 @@ draw_world_terrain_tiles :: proc() {
 				}
 			}
 			if ctx.gs.debug_show_grid {
-				label := tile.kind == .water ? "water" : fmt.tprintf("%v", tile.block_index)
+				label := tile.kind == .water ? fmt.tprintf("w%v", clamp(tile.water_variant, 1, MAX_WATER_VARIANTS)) : fmt.tprintf("%v", tile.block_index)
 				draw_text(tile_center, label, pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
 			}
 			tx += 1
