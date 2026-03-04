@@ -126,7 +126,7 @@ Item_Kind :: enum u8 {
 	fiber,
 	stick,
 	rope,
-	sapling,
+	sprout,
 	stone_blade,
 	stone_multitool,
 	oblisk_fragment,
@@ -162,6 +162,8 @@ MAX_TERRAIN_STRUCTURE_ROWS :: 64
 MAX_TERRAIN_STRUCTURE_COLS :: 64
 WORLD_UNLOCK_AREA_SIZE_TILES :: 16
 WORLD_UNLOCK_CAMERA_EDGE_MARGIN_TILES: f32 : 1.5
+UNLOCK_EDGE_FOG_RADIUS_TILES :: 4
+UNLOCK_EDGE_FOG_MAX_ALPHA: f32 : 0.28
 
 Drag_From_Kind :: enum u8 {
 	none,
@@ -704,7 +706,7 @@ item_kind_from_token :: proc(tok: string) -> (item: Item_Kind, ok: bool) #option
 	case "fiber": return .fiber, true
 	case "stick": return .stick, true
 	case "rope": return .rope, true
-	case "sapling": return .sapling, true
+	case "sprout": return .sprout, true
 	case "stone_blade": return .stone_blade, true
 	case "stone_multitool": return .stone_multitool, true
 	case "oblisk_fragment": return .oblisk_fragment, true
@@ -1576,8 +1578,8 @@ game_draw :: proc() {
 
 get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, ok: bool) {
 	#partial switch item {
-	case .sapling:
-		return .sapling, true
+	case .sprout:
+		return .sprout, true
 	case:
 		return .nil, false
 	}
@@ -1585,7 +1587,7 @@ get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, o
 
 get_placeable_preview_pivot :: proc(item: Item_Kind) -> utils.Pivot {
 	#partial switch item {
-	case .sapling:
+	case .sprout:
 		return .bottom_center
 	case:
 		return .center_center
@@ -1705,6 +1707,42 @@ is_tile_in_unlocked_world :: proc(tile_x: int, tile_y: int) -> bool {
 	ax := world_area_coord_for_tile(tile_x)
 	ay := world_area_coord_for_tile(tile_y)
 	return is_world_area_unlocked(ax, ay)
+}
+
+edge_fog_alpha_for_unlocked_tile :: proc(tile_x: int, tile_y: int) -> f32 {
+	if !is_tile_in_unlocked_world(tile_x, tile_y) {
+		return 0
+	}
+
+	r := UNLOCK_EDGE_FOG_RADIUS_TILES
+	if r <= 0 {
+		return 0
+	}
+
+	min_dist := r + 1
+	for oy := -r; oy <= r; oy += 1 {
+		for ox := -r; ox <= r; ox += 1 {
+			nx := tile_x + ox
+			ny := tile_y + oy
+			if is_tile_in_unlocked_world(nx, ny) {
+				continue
+			}
+
+			dx := math.abs(ox)
+			dy := math.abs(oy)
+			d := max(dx, dy)
+			if d < min_dist {
+				min_dist = d
+			}
+		}
+	}
+
+	if min_dist > r {
+		return 0
+	}
+
+	t := 1.0 - f32(min_dist)/f32(r)
+	return math.clamp(t*UNLOCK_EDGE_FOG_MAX_ALPHA, 0, UNLOCK_EDGE_FOG_MAX_ALPHA)
 }
 
 is_world_pos_in_locked_area :: proc(pos: Vec2) -> bool {
@@ -2825,6 +2863,11 @@ draw_world_terrain_tiles :: proc() {
 				label := tile.kind == .water ? fmt.tprintf("w%v%v", clamp(tile.water_variant, 1, MAX_WATER_VARIANTS), tile.water_flip_x ? "a" : "") : fmt.tprintf("%v", tile.block_index)
 				draw_text(tile_center, label, pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
 			}
+
+			fog_alpha := edge_fog_alpha_for_unlocked_tile(tx, ty)
+			if fog_alpha > 0 {
+				draw_rect(tile_rect, col=Vec4{1, 1, 1, fog_alpha}, z_layer=.vfx)
+			}
 			tx += 1
 		}
 		ty += 1
@@ -3242,7 +3285,7 @@ item_name :: proc(item: Item_Kind) -> string {
 	case .fiber: return "Fiber"
 	case .stick: return "Stick"
 	case .rope: return "Rope"
-	case .sapling: return "Sapling"
+	case .sprout: return "Sprout"
 	case .stone_blade: return "Stone Blade"
 	case .stone_multitool: return "Stone Multitool"
 	case .oblisk_fragment: return "Fragment"
@@ -3260,7 +3303,7 @@ item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	case .fiber: return .fibre
 	case .stick: return .sticks
 	case .rope: return .rope
-	case .sapling: return .sapling
+	case .sprout: return .sprout
 	case .stone_blade: return .stone_blade
 	case .stone_multitool: return .stone_multitool
 	case .oblisk_fragment: return .oblisk_broken
@@ -3278,7 +3321,7 @@ item_max_stack :: proc(item: Item_Kind) -> int {
 	case .fiber: return 99
 	case .stick: return 99
 	case .rope: return 99
-	case .sapling: return 99
+	case .sprout: return 16
 	case .stone_blade: return 99
 	case .stone_multitool: return 1
 	case .oblisk_fragment: return 99
@@ -3296,11 +3339,11 @@ item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
 	case .fiber: return 0.5
 	case .stick: return 0.45
 	case .rope: return 0.5
-	case .sapling: return 0.55
+	case .sprout: return 0.55
 	case .stone_blade: return 0.35
 	case .stone_multitool: return 0.4
 	case .oblisk_fragment: return 0.5
-	case .oblisk_core: return 0.6
+	case .oblisk_core: return 3
 	case .dagger_item: return 0.45
 	case: return 0.6
 	}
@@ -4171,7 +4214,7 @@ compute_hit_drop_spawn_pos :: proc(target: ^Entity) -> Vec2 {
 	return edge + offset
 }
 
-should_roll_bonus_sapling_drop :: proc(kind: Entity_Kind) -> bool {
+should_roll_bonus_sprout_drop :: proc(kind: Entity_Kind) -> bool {
 	#partial switch kind {
 	case .tree_ent, .sapling_ent, .sprout_ent:
 		return true
@@ -4193,8 +4236,8 @@ get_place_approach_pos :: proc(player_pos: Vec2, place_pos: Vec2) -> Vec2 {
 
 place_entity_from_item :: proc(item: Item_Kind, pos: Vec2) -> bool {
 	#partial switch item {
-	case .sapling:
-		e := entity_create(.sapling_ent)
+	case .sprout:
+		e := entity_create(.sprout_ent)
 		e.pos = pos
 		return true
 	case:
@@ -4204,7 +4247,7 @@ place_entity_from_item :: proc(item: Item_Kind, pos: Vec2) -> bool {
 
 try_begin_place_equipped_item :: proc(mouse_world: Vec2) -> bool {
 	item, count := get_equipped_item()
-	if item != .sapling || count <= 0 {
+	if item != .sprout || count <= 0 {
 		return false
 	}
 
@@ -4442,8 +4485,8 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		sprout := entity_create(.sprout_ent)
 		sprout.pos = target.pos
 	}
-	if should_roll_bonus_sapling_drop(target.kind) && roll_chance(0.5, u64(target.handle.id)+u64(ctx.gs.ticks)*733) {
-		spawn_item_pickup_towards_player(.sapling, 1, compute_hit_drop_spawn_pos(target))
+	if should_roll_bonus_sprout_drop(target.kind) && roll_chance(0.5, u64(target.handle.id)+u64(ctx.gs.ticks)*733) {
+		spawn_item_pickup_towards_player(.sprout, 1, compute_hit_drop_spawn_pos(target))
 	}
 	entity_destroy(target)
 }
@@ -4461,7 +4504,7 @@ find_hittable_entity_at_world_pos :: proc(mouse_world: Vec2) -> (^Entity, bool) 
 	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx, .grass_ent:
 		return nil, false
 	}
-
+ 
 	return target, true
 }
 
