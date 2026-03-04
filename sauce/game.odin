@@ -1582,6 +1582,7 @@ game_draw :: proc() {
 			for handle in get_all_ents() {
 				e := entity_from_handle(handle)
 				draw_entity_hitbox_debug(e^)
+				draw_entity_sort_foot_debug(e^)
 			}
 		}
 
@@ -2928,6 +2929,19 @@ draw_entity_overlap_debug :: proc(e: Entity) {
 	draw_rect(overlap_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.9, 1.0, 0.95}, z_layer=.top)
 }
 
+draw_entity_sort_foot_debug :: proc(e: Entity) {
+	if !is_valid(e) || e.kind == .movement_indicator_fx {
+		return
+	}
+
+	foot := get_entity_sort_feet_pos(e)
+	layer: ZLayer = .top
+	if is_game_paused() {
+		layer = .pause_menu
+	}
+	draw_rect(shape.rect_make(foot, Vec2{2, 2}, pivot=.center_center), col=Vec4{1, 1, 1, 0.95}, z_layer=layer)
+}
+
 draw_entity_durability_debug :: proc(e: Entity) {
 	if e.durability <= 0 {
 		return
@@ -3045,6 +3059,38 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 		return hitbox.y
 	}
 	return e.pos.y
+}
+
+get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
+	#partial switch e.kind {
+	case .player:
+		return e.pos
+	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+		return e.pos
+	}
+
+	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
+		size := get_sprite_size(e.sprite)
+		frame_width := get_frame_width_px_for_sprite(e.sprite, e.anim_index, size.x)
+		scale_y := e.sort_scale_y
+		if scale_y == 0 {
+			scale_y = 1
+		}
+
+		scaled_size := Vec2{frame_width, size.y * scale_y}
+		pivot_scale := utils.scale_from_pivot(e.draw_pivot)
+		min := e.pos - scaled_size * pivot_scale - e.draw_offset
+		return Vec2{
+			min.x + frame_width * 0.5,
+			min.y + sprite_sort_foot_y[e.sprite] * scale_y,
+		}
+	}
+
+	hitbox, ok := get_entity_hitbox_rect(e)
+	if ok {
+		return Vec2{(hitbox.x + hitbox.z) * 0.5, hitbox.y}
+	}
+	return e.pos
 }
 
 get_entity_sort_screen_y :: proc(e: Entity) -> f32 {
