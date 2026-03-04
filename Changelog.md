@@ -34,6 +34,7 @@
 - Improved early-game performance by gating chunk vegetation/structure spawning to chunks that overlap unlocked world areas, avoiding heavy entity generation in still-locked regions.
 - Added unlocked-world camera clamping with an edge margin so the camera scrolls within unlocked bounds and only lets the player roam freely once movement reaches near the visible unlocked-area edge.
 - Refined unlocked-world camera behavior so vertical follow now continues until unlocked bounds actually reach the screen edge (no vertical margin clamp).
+- Fixed camera freeze by basing unlocked-world clamp view extents on game resolution (`GAME_RES_WIDTH/HEIGHT`) instead of window-size-derived extents.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

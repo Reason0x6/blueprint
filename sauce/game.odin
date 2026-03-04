@@ -1753,9 +1753,8 @@ get_follow_camera_target :: proc(player_pos: Vec2) -> Vec2 {
 	min_world := Vec2{f32(min_tx) * ENTITY_GRID_SIZE, f32(min_ty) * ENTITY_GRID_SIZE}
 	max_world := Vec2{f32(max_tx+1) * ENTITY_GRID_SIZE, f32(max_ty+1) * ENTITY_GRID_SIZE}
 
-	zoom := max(0.0001, get_camera_zoom())
-	half_view_w := (f32(window_w) * 0.5) / zoom
-	half_view_h := (f32(window_h) * 0.5) / zoom
+	half_view_w := f32(GAME_RES_WIDTH) * 0.5
+	half_view_h := f32(GAME_RES_HEIGHT) * 0.5
 	margin_x := WORLD_UNLOCK_CAMERA_EDGE_MARGIN_TILES * ENTITY_GRID_SIZE
 	margin_y: f32 = 0
 
