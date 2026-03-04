@@ -28,6 +28,8 @@
 - Added unlockable world areas using `16x16` tile regions: player now starts with only the current area unlocked, and movement/targeting is blocked in locked regions.
 - Locked regions now render as dark tiles, while unlocked regions render normal terrain/collision.
 - Added pause-menu debug controls for area progression: `Unlock Here` (current area) and `Unlock Adjacent` (3x3 around current area), plus current area coordinate display.
+- Added deterministic per-chunk terrain structure spawning: each visited chunk now selects one random loaded structure and places it at a random origin constrained to fit within a centered `15x15` inner area.
+- Removed the previous hardcoded startup `island_1` structure spawn so chunk-based random structure placement drives terrain structure distribution.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

@@ -101,6 +101,7 @@ LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 PLAYER_MOVE_SPEED: f32 : 112.0
 BIOME_CHUNK_SIZE_TILES :: 64
+STRUCTURE_CHUNK_INNER_AREA_TILES :: 15
 VEG_SPAWN_RADIUS_CHUNKS :: 2
 GRASS_SPAWNS_PER_CHUNK :: 11
 GRASS_SPAWN_TRIES_PER_CHUNK :: 28
@@ -1338,7 +1339,6 @@ game_update :: proc() {
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
 		ctx.gs.unlocked_world_areas = make([dynamic]u64, 0, 64, allocator=context.allocator)
 		_ = unlock_world_area_for_world_pos(player.pos)
-		_ = spawn_terrain_structure("island_1", Vec2{0,0})
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = Vec2{64, 0}
@@ -2235,12 +2235,71 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	}
 }
 
+spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
+	if len(terrain_structures) <= 0 {
+		return
+	}
+
+	inner := STRUCTURE_CHUNK_INNER_AREA_TILES
+	if inner <= 0 || inner > BIOME_CHUNK_SIZE_TILES {
+		return
+	}
+
+	inner_min := (BIOME_CHUNK_SIZE_TILES - inner) / 2
+	inner_max := inner_min + inner - 1
+
+	candidates := make([dynamic]int, 0, len(terrain_structures), allocator=context.temp_allocator)
+	for i in 0..<len(terrain_structures) {
+		st := terrain_structures[i]
+		if st.cols <= 0 || st.rows <= 0 do continue
+		if st.cols > inner || st.rows > inner do continue
+		append(&candidates, i)
+	}
+
+	if len(candidates) == 0 {
+		return
+	}
+
+	base_seed := u64(i64(chunk_x)*104729 + i64(chunk_y)*130363)
+	pick_f := random01_from_seed(base_seed ~ 0x9E3779B97F4A7C15)
+	pick_i := clamp(int(math.floor(pick_f * f32(len(candidates)))), 0, len(candidates)-1)
+	st_i := candidates[pick_i]
+	st := terrain_structures[st_i]
+
+	max_origin_x := inner_max - (st.cols - 1)
+	min_origin_y := inner_min + (st.rows - 1)
+	if max_origin_x < inner_min || min_origin_y > inner_max {
+		return
+	}
+
+	x_choices := max_origin_x - inner_min + 1
+	y_choices := inner_max - min_origin_y + 1
+	if x_choices <= 0 || y_choices <= 0 {
+		return
+	}
+
+	rx := random01_from_seed(base_seed ~ 0xD1B54A32D192ED03)
+	ry := random01_from_seed(base_seed ~ 0x94D049BB133111EB)
+	off_x := clamp(int(math.floor(rx * f32(x_choices))), 0, x_choices-1)
+	off_y := clamp(int(math.floor(ry * f32(y_choices))), 0, y_choices-1)
+
+	origin_tile_x := chunk_x*BIOME_CHUNK_SIZE_TILES + inner_min + off_x
+	origin_tile_y := chunk_y*BIOME_CHUNK_SIZE_TILES + min_origin_y + off_y
+
+	append(&ctx.gs.terrain_structure_instances, Terrain_Structure_Instance{
+		structure_index = st_i,
+		origin_tile_x = origin_tile_x,
+		origin_tile_y = origin_tile_y,
+	})
+}
+
 spawn_vegetation_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	if is_vegetation_chunk_spawned(chunk_x, chunk_y) {
 		return
 	}
 	mark_vegetation_chunk_spawned(chunk_x, chunk_y)
 
+	spawn_random_structure_for_chunk(chunk_x, chunk_y)
 	spawn_grass_for_chunk(chunk_x, chunk_y, tile_size)
 	spawn_trees_for_chunk(chunk_x, chunk_y, tile_size)
 }
