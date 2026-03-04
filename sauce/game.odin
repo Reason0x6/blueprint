@@ -1636,6 +1636,7 @@ draw_pause_menu_ui :: proc() {
 		if len(terrain_structures) > 0 && (ctx.gs.structure_maker_selected_index < 0 || ctx.gs.structure_maker_selected_index >= len(terrain_structures)) {
 			ctx.gs.structure_maker_selected_index = 0
 		}
+		set_ui_overlay_open(UI_OVERLAY_PAUSE, false)
 		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, true)
 	}
 }
@@ -1699,6 +1700,7 @@ draw_structure_maker_ui :: proc() {
 	draw_text((close_rect.xy+close_rect.zw)*0.5, "Close", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 	if close_pressed {
 		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, false)
+		set_ui_overlay_open(UI_OVERLAY_PAUSE, true)
 		return
 	}
 

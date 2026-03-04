@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Changed Structure Maker overlay flow to run as its own paused screen (pause menu hidden while maker is open, and restored on close), preventing simultaneous pause-menu + maker button processing during editor interaction.
 - Hardened Structure Maker UI runtime path by replacing the nested per-frame local button proc with a top-level helper (`draw_structure_maker_button`), avoiding local-proc runtime edge cases when opening/clicking the editor.
 - Fixed Structure Maker open crash path by keeping pause active when opening the editor and treating `UI_OVERLAY_STRUCTURE_MAKER` as a paused state in `is_game_paused`, so gameplay update paths do not run under the editor overlay.
 - Structure Maker now supports editing existing structures: select loaded structure (`<`/`>`), `Load` it into the grid, and `Overwrite` to write the updated tiles back to the same structure name in `res/data/terrain_structures.txt`.
