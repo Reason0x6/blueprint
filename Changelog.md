@@ -31,6 +31,7 @@
 - Added deterministic per-chunk terrain structure spawning: each visited chunk now selects one random loaded structure and places it at a random origin constrained to fit within a centered `15x15` inner area.
 - Removed the previous hardcoded startup `island_1` structure spawn so chunk-based random structure placement drives terrain structure distribution.
 - Added an on-screen FPS counter in the top-left HUD.
+- Improved early-game performance by gating chunk vegetation/structure spawning to chunks that overlap unlocked world areas, avoiding heavy entity generation in still-locked regions.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

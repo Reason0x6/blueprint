@@ -1686,6 +1686,27 @@ is_rect_touching_locked_world_area :: proc(rect: shape.Rect) -> bool {
 	return false
 }
 
+is_chunk_in_unlocked_world :: proc(chunk_x: int, chunk_y: int) -> bool {
+	min_tile_x := chunk_x * BIOME_CHUNK_SIZE_TILES
+	max_tile_x := min_tile_x + BIOME_CHUNK_SIZE_TILES - 1
+	min_tile_y := chunk_y * BIOME_CHUNK_SIZE_TILES
+	max_tile_y := min_tile_y + BIOME_CHUNK_SIZE_TILES - 1
+
+	area_min_x := world_area_coord_for_tile(min_tile_x)
+	area_max_x := world_area_coord_for_tile(max_tile_x)
+	area_min_y := world_area_coord_for_tile(min_tile_y)
+	area_max_y := world_area_coord_for_tile(max_tile_y)
+
+	for ay := area_min_y; ay <= area_max_y; ay += 1 {
+		for ax := area_min_x; ax <= area_max_x; ax += 1 {
+			if is_world_area_unlocked(ax, ay) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
 	size := get_sprite_size(sprite)
 	return size.x > 0 && size.y > 0
@@ -2305,6 +2326,9 @@ spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
 
 spawn_vegetation_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	if is_vegetation_chunk_spawned(chunk_x, chunk_y) {
+		return
+	}
+	if !is_chunk_in_unlocked_world(chunk_x, chunk_y) {
 		return
 	}
 	mark_vegetation_chunk_spawned(chunk_x, chunk_y)
