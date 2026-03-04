@@ -1583,6 +1583,15 @@ get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, o
 	}
 }
 
+get_placeable_preview_pivot :: proc(item: Item_Kind) -> utils.Pivot {
+	#partial switch item {
+	case .sapling:
+		return .bottom_center
+	case:
+		return .center_center
+	}
+}
+
 draw_placeable_preview :: proc() {
 	if is_any_ui_overlay_open() {
 		return
@@ -1626,7 +1635,7 @@ draw_placeable_preview :: proc() {
 	if is_world_position_blocked_for_player(place_pos) {
 		col = Vec4{1, 0.25, 0.25, 0.28}
 	}
-	draw_sprite(place_pos, sprite, pivot=.center_center, col=col, z_layer=.vfx)
+	draw_sprite(place_pos, sprite, pivot=get_placeable_preview_pivot(item), col=col, z_layer=.vfx)
 }
 
 floor_div_int :: proc(v: int, d: int) -> int {
