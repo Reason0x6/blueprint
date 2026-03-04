@@ -984,6 +984,7 @@ parse_terrain_structure_expr :: proc(name: string, expr_raw: string) -> bool {
 	}
 
 	st := Terrain_Structure{name=name}
+	st.name = strings.clone(name, allocator=context.allocator)
 	st.rows = len(row_strs)
 
 	for r in 0..<len(row_strs) {
