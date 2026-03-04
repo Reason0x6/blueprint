@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Depth ordering now sorts entities by feet in screen-space Y (top to bottom), and behind-fade checks now use the same screen-space comparison; this makes front/behind behavior match visual position on screen (lower feet render in front, higher feet render behind).
 - Player draw-order sorting now uses player feet anchor (`player.pos.y`) directly instead of sprite-foot metadata, fixing cases where player was always rendered in front of bushes due to draw-offset/meta foot mismatch.
 - Bush draw-order sorting now uses bush anchor feet (`e.pos.y`) instead of opaque-pixel foot metadata, because bush sheets include large transparent bottom padding that otherwise delayed front/back flips; player now moves behind/in-front right when crossing bush base.
 - Fixed sprite-foot depth sorting orientation by converting meta `sort_foot_y` from top-origin image coordinates to in-game bottom-origin coordinates, and restored fallback feet sorting to `hitbox.y` (not `hitbox.w`) so bushes/player front-back ordering now follows feet position correctly.

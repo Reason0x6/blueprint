@@ -126,7 +126,7 @@ Item_Kind :: enum u8 {
 	fiber,
 	stick,
 	rope,
-	sapling,
+	sprout,
 	stone_blade,
 	stone_multitool,
 	oblisk_fragment,
@@ -742,7 +742,7 @@ item_kind_from_token :: proc(tok: string) -> (item: Item_Kind, ok: bool) #option
 	case "fiber": return .fiber, true
 	case "stick": return .stick, true
 	case "rope": return .rope, true
-	case "sapling": return .sapling, true
+	case "sprout": return .sprout, true
 	case "stone_blade": return .stone_blade, true
 	case "stone_multitool": return .stone_multitool, true
 	case "oblisk_fragment": return .oblisk_fragment, true
@@ -1554,16 +1554,16 @@ game_draw :: proc() {
 			append(&draw_order, handle)
 		}
 
-		// Draw top-to-bottom using hitbox base Y so lower-footprint objects render in front.
+		// Draw top-to-bottom in screen space so lower-on-screen entities render in front.
 		for i in 1..<len(draw_order) {
 			key := draw_order[i]
-			key_y := get_entity_sort_y(entity_from_handle(key)^)
+			key_y := get_entity_sort_screen_y(entity_from_handle(key)^)
 			j := i
 
 			for j > 0 {
 				prev := entity_from_handle(draw_order[j-1])
-				prev_y := get_entity_sort_y(prev^)
-				if prev_y >= key_y do break
+				prev_y := get_entity_sort_screen_y(prev^)
+				if prev_y <= key_y do break
 				draw_order[j] = draw_order[j-1]
 				j -= 1
 			}
@@ -3047,6 +3047,18 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 	return e.pos.y
 }
 
+get_entity_sort_screen_y :: proc(e: Entity) -> f32 {
+	feet_world_y := get_entity_sort_y(e)
+	view := linalg.inverse(get_world_space_camera())
+	clip := get_world_space_proj() * view * Vec4{0, feet_world_y, 0, 1}
+	if clip.w == 0 {
+		return 0
+	}
+	ndc_y := clip.y / clip.w
+	// Window-space Y grows downward; larger values are lower on screen.
+	return (1.0 - ndc_y) * 0.5 * f32(window_h)
+}
+
 is_player_behind_entity :: proc(e: Entity) -> bool {
 	if !e.hide_when_behind {
 		return false
@@ -3075,9 +3087,10 @@ is_player_behind_entity :: proc(e: Entity) -> bool {
 		return false
 	}
 
-	player_base_y := get_entity_sort_y(player^)
-	entity_base_y := get_entity_sort_y(e)
-	is_behind_entity := player_base_y > entity_base_y
+	player_screen_y := get_entity_sort_screen_y(player^)
+	entity_screen_y := get_entity_sort_screen_y(e)
+	// Behind means player's feet are higher on screen than the entity feet.
+	is_behind_entity := player_screen_y < entity_screen_y
 	return is_behind_entity
 }
 
