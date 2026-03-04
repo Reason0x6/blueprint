@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Split entity collision and behind-fade behavior into separate flags by adding `hide_when_behind`, so overlap-based transparency can be enabled without requiring `blocks_player`; bushes now use fade-on-behind while remaining non-blocking.
 - Player movement now checks full player-hitbox occupancy before applying WASD or click-to-move steps, so structure water collision blocks movement immediately instead of only reverting after overlap.
 - Added shared player auto-move cancel handling when movement is blocked by water/entity hitboxes.
 - Added configurable terrain block hitboxes by block index via `setup_terrain_block_hitboxes`/`set_terrain_block_hitbox`, with block `11` explicitly non-blocking.

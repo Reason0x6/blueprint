@@ -291,6 +291,7 @@ Entity :: struct {
 	break_drops: [MAX_BREAK_DROPS]Break_Drop,
 	break_drop_len: int,
 	blocks_player: bool,
+	hide_when_behind: bool,
 	on_hit_proc: proc(^Entity, ^Entity),
 	pickup_item: Item_Kind,
 	pickup_count: int,
@@ -336,6 +337,8 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 	// entity defaults
 	e.draw_proc = draw_entity_default
 	e.draw_pivot = .bottom_center
+	e.blocks_player = false
+	e.hide_when_behind = false
 
 	switch kind {
 		case .nil:
@@ -3004,7 +3007,7 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 }
 
 is_player_behind_entity :: proc(e: Entity) -> bool {
-	if !e.blocks_player {
+	if !e.hide_when_behind {
 		return false
 	}
 
@@ -5103,6 +5106,7 @@ setup_item_pickup :: proc(using e: ^Entity) {
 	kind = .item_pickup
 	draw_pivot = .center_center
 	blocks_player = false
+	hide_when_behind = false
 	set_entity_durability(e, 0)
 	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
@@ -5139,6 +5143,7 @@ setup_dagger_projectile :: proc(using e: ^Entity) {
 	sprite = .dagger_item_flying
 	draw_pivot = .center_center
 	blocks_player = false
+	hide_when_behind = false
 	set_entity_durability(e, 0)
 	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
@@ -5198,6 +5203,7 @@ setup_movement_indicator_fx :: proc(using e: ^Entity) {
 	draw_pivot = .center_center
 	draw_offset = {}
 	blocks_player = false
+	hide_when_behind = false
 	set_entity_durability(e, 0)
 	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
@@ -5224,6 +5230,7 @@ setup_oblisk_ent :: proc(using e: ^Entity) {
 	sprite = .oblisk_rest
 	draw_pivot = .bottom_center
 	blocks_player = true
+	hide_when_behind = true
 	set_entity_durability(e, 800)
 	clear_entity_break_drops(e)
 	add_entity_break_drop(e, .oblisk_fragment, 1)
@@ -5262,6 +5269,7 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	sprite = .tree
 	draw_pivot = .bottom_center
 	blocks_player = true
+	hide_when_behind = true
 	set_entity_durability(e, 16)
 	clear_entity_break_drops(e)
 	add_entity_break_drop(e, .wood, 2)
@@ -5278,6 +5286,7 @@ setup_sapling_ent :: proc(using e: ^Entity) {
 	sprite = .sapling
 	draw_pivot = .bottom_center
 	blocks_player = true
+	hide_when_behind = true
 	set_entity_durability(e, 3)
 	clear_entity_break_drops(e)
 	add_entity_break_drop(e, .wood, 1)
@@ -5299,6 +5308,7 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	sprite = .sprout
 	draw_pivot = .bottom_center
 	blocks_player = true
+	hide_when_behind = true
 	set_entity_durability(e, 2)
 	clear_entity_break_drops(e)
 	add_entity_break_drop(e, .fiber, 1)
@@ -5320,6 +5330,7 @@ setup_bush_ent_common :: proc(e: ^Entity, sprite: Sprite_Name) {
 	e.sprite = sprite
 	e.draw_pivot = .bottom_center
 	e.blocks_player = false
+	e.hide_when_behind = true
 	set_entity_durability(e, 0)
 	clear_entity_break_drops(e)
 	e.on_hit_proc = entity_on_hit_noop
@@ -5370,6 +5381,7 @@ setup_grass_ent :: proc(using e: ^Entity) {
 	sprite = .grass
 	draw_pivot = .center_center
 	blocks_player = false
+	hide_when_behind = false
 	set_entity_durability(e, 0)
 	clear_entity_break_drops(e)
 	on_hit_proc = entity_on_hit_noop
