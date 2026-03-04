@@ -2355,9 +2355,10 @@ spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
 	if inner <= 0 || inner > BIOME_CHUNK_SIZE_TILES {
 		return
 	}
-
-	inner_min := (BIOME_CHUNK_SIZE_TILES - inner) / 2
-	inner_max := inner_min + inner - 1
+	chunk_min_x := chunk_x * BIOME_CHUNK_SIZE_TILES
+	chunk_max_x := chunk_min_x + BIOME_CHUNK_SIZE_TILES - 1
+	chunk_min_y := chunk_y * BIOME_CHUNK_SIZE_TILES
+	chunk_max_y := chunk_min_y + BIOME_CHUNK_SIZE_TILES - 1
 
 	candidates := make([dynamic]int, 0, len(terrain_structures), allocator=context.temp_allocator)
 	for i in 0..<len(terrain_structures) {
@@ -2371,20 +2372,79 @@ spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
 		return
 	}
 
-	base_seed := u64(i64(chunk_x)*104729 + i64(chunk_y)*130363)
-	pick_f := random01_from_seed(base_seed ~ 0x9E3779B97F4A7C15)
-	pick_i := clamp(int(math.floor(pick_f * f32(len(candidates)))), 0, len(candidates)-1)
-	st_i := candidates[pick_i]
-	st := terrain_structures[st_i]
+	Inner_Zone :: struct {
+		min_x, min_y, max_x, max_y: int,
+	}
+	zones := make([dynamic]Inner_Zone, 0, 16, allocator=context.temp_allocator)
+	area_min_x := world_area_coord_for_tile(chunk_min_x)
+	area_max_x := world_area_coord_for_tile(chunk_max_x)
+	area_min_y := world_area_coord_for_tile(chunk_min_y)
+	area_max_y := world_area_coord_for_tile(chunk_max_y)
+	for ay := area_min_y; ay <= area_max_y; ay += 1 {
+		for ax := area_min_x; ax <= area_max_x; ax += 1 {
+			if !is_world_area_unlocked(ax, ay) {
+				continue
+			}
 
-	max_origin_x := inner_max - (st.cols - 1)
-	min_origin_y := inner_min + (st.rows - 1)
-	if max_origin_x < inner_min || min_origin_y > inner_max {
+			area_tile_min_x := ax * WORLD_UNLOCK_AREA_SIZE_TILES
+			area_tile_max_x := area_tile_min_x + WORLD_UNLOCK_AREA_SIZE_TILES - 1
+			area_tile_min_y := ay * WORLD_UNLOCK_AREA_SIZE_TILES
+			area_tile_max_y := area_tile_min_y + WORLD_UNLOCK_AREA_SIZE_TILES - 1
+
+			inter_min_x := max(chunk_min_x, area_tile_min_x)
+			inter_max_x := min(chunk_max_x, area_tile_max_x)
+			inter_min_y := max(chunk_min_y, area_tile_min_y)
+			inter_max_y := min(chunk_max_y, area_tile_max_y)
+			if inter_max_x-inter_min_x+1 < inner || inter_max_y-inter_min_y+1 < inner {
+				continue
+			}
+
+			append(&zones, Inner_Zone{inter_min_x, inter_min_y, inter_max_x, inter_max_y})
+		}
+	}
+
+	if len(zones) == 0 {
 		return
 	}
 
-	x_choices := max_origin_x - inner_min + 1
-	y_choices := inner_max - min_origin_y + 1
+	base_seed := u64(i64(chunk_x)*104729 + i64(chunk_y)*130363)
+	zone_f := random01_from_seed(base_seed ~ 0x243F6A8885A308D3)
+	zone_i := clamp(int(math.floor(zone_f * f32(len(zones)))), 0, len(zones)-1)
+	zone := zones[zone_i]
+
+	zone_w := zone.max_x - zone.min_x + 1
+	zone_h := zone.max_y - zone.min_y + 1
+	inner_off_x_choices := zone_w - inner + 1
+	inner_off_y_choices := zone_h - inner + 1
+	inner_off_x := 0
+	inner_off_y := 0
+	if inner_off_x_choices > 1 {
+		fx := random01_from_seed(base_seed ~ 0x13198A2E03707344)
+		inner_off_x = clamp(int(math.floor(fx * f32(inner_off_x_choices))), 0, inner_off_x_choices-1)
+	}
+	if inner_off_y_choices > 1 {
+		fy := random01_from_seed(base_seed ~ 0xA4093822299F31D0)
+		inner_off_y = clamp(int(math.floor(fy * f32(inner_off_y_choices))), 0, inner_off_y_choices-1)
+	}
+
+	inner_min_x := zone.min_x + inner_off_x
+	inner_min_y := zone.min_y + inner_off_y
+	inner_max_x := inner_min_x + inner - 1
+	inner_max_y := inner_min_y + inner - 1
+
+	pick_f := random01_from_seed(base_seed ~ 0x9E3779B97F4A7C15)
+	st_pick_i := clamp(int(math.floor(pick_f * f32(len(candidates)))), 0, len(candidates)-1)
+	st_i := candidates[st_pick_i]
+	st := terrain_structures[st_i]
+
+	max_origin_x := inner_max_x - (st.cols - 1)
+	min_origin_y := inner_min_y + (st.rows - 1)
+	if max_origin_x < inner_min_x || min_origin_y > inner_max_y {
+		return
+	}
+
+	x_choices := max_origin_x - inner_min_x + 1
+	y_choices := inner_max_y - min_origin_y + 1
 	if x_choices <= 0 || y_choices <= 0 {
 		return
 	}
@@ -2394,8 +2454,8 @@ spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
 	off_x := clamp(int(math.floor(rx * f32(x_choices))), 0, x_choices-1)
 	off_y := clamp(int(math.floor(ry * f32(y_choices))), 0, y_choices-1)
 
-	origin_tile_x := chunk_x*BIOME_CHUNK_SIZE_TILES + inner_min + off_x
-	origin_tile_y := chunk_y*BIOME_CHUNK_SIZE_TILES + min_origin_y + off_y
+	origin_tile_x := inner_min_x + off_x
+	origin_tile_y := min_origin_y + off_y
 
 	append(&ctx.gs.terrain_structure_instances, Terrain_Structure_Instance{
 		structure_index = st_i,
