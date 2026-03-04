@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Draw-order sorting now uses sprite meta `sort_foot_y` (opaque-foot pixel) when available, with per-entity `sort_scale_y` support so downscaled sprites (like bushes at `0.5`) sort correctly against the player near their visual base; fallback hitbox sorting now uses hitbox bottom (`rect.w`).
 - Added a build-time sprite meta validator (`asset_workbench/ensure_sprite_meta_opaque.ps1`) that scans `res/images/*.png` and appends missing `opaque_bounds`, `sort_foot_x`, and `sort_foot_y` fields to matching `.meta` files; `build.bat` now runs this check before compiling.
 - Split entity collision and behind-fade behavior into separate flags by adding `hide_when_behind`, so overlap-based transparency can be enabled without requiring `blocks_player`; bushes now use fade-on-behind while remaining non-blocking.
 - Player movement now checks full player-hitbox occupancy before applying WASD or click-to-move steps, so structure water collision blocks movement immediately instead of only reverting after overlap.

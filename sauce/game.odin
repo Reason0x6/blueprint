@@ -276,6 +276,7 @@ Entity :: struct {
 	flip_x: bool,
 	draw_offset: Vec2,
 	draw_pivot: utils.Pivot,
+	sort_scale_y: f32,
 	rotation: f32,
 	hit_flash: Vec4,
 	sprite: Sprite_Name,
@@ -338,7 +339,9 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 	e.draw_proc = draw_entity_default
 	e.draw_pivot = .bottom_center
 	e.blocks_player = false
-	e.hide_when_behind = false
+	e.hide_when_behind = true
+	e.sort_scale_y = 0.5
+	e.sort_scale_y = 1
 
 	switch kind {
 		case .nil:
@@ -481,6 +484,8 @@ Frame_Anim_Meta :: struct {
 	frame_center_offsets: [dynamic]Vec2,
 }
 frame_anim_meta: [Sprite_Name]Frame_Anim_Meta
+sprite_sort_foot_y: [Sprite_Name]f32
+sprite_sort_foot_y_valid: [Sprite_Name]bool
 
 get_sprite_offset :: proc(img: Sprite_Name) -> (offset: Vec2, pivot: utils.Pivot) {
 	data := sprite_data[img]
@@ -648,6 +653,20 @@ parse_simple_f32 :: proc(s: string) -> (v: f32, ok: bool) #optional_ok {
 	}
 
 	return sign * (int_part + frac_part/frac_scale), true
+}
+
+meta_value_for_key :: proc(text: string, key: string) -> (value: string, ok: bool) #optional_ok {
+	start := strings.index(text, key)
+	if start < 0 {
+		return "", false
+	}
+
+	rest := text[start+len(key):]
+	end := strings.index(rest, "\n")
+	if end >= 0 {
+		rest = rest[:end]
+	}
+	return trim_ascii_ws(rest), true
 }
 
 trim_ascii_ws :: proc(s: string) -> string {
@@ -1125,32 +1144,28 @@ load_sprite_frame_meta :: proc() {
 		}
 
 		text := string(data)
-		start := strings.index(text, "frame_widths=")
-		if start < 0 {
-			continue
-		}
-		rest := text[start+len("frame_widths="):]
-		end := strings.index(rest, "\n")
-		if end >= 0 {
-			rest = rest[:end]
-		}
-
-		widths := parse_positive_ints(rest)
-		if len(widths) > 0 {
-			frame_anim_meta[sprite].frame_widths = widths
-		}
-
-		offset_start := strings.index(text, "frame_center_offsets=")
-		if offset_start >= 0 {
-			offset_rest := text[offset_start+len("frame_center_offsets="):]
-			offset_end := strings.index(offset_rest, "\n")
-			if offset_end >= 0 {
-				offset_rest = offset_rest[:offset_end]
+		widths_text, widths_ok := meta_value_for_key(text, "frame_widths=")
+		if widths_ok {
+			widths := parse_positive_ints(widths_text)
+			if len(widths) > 0 {
+				frame_anim_meta[sprite].frame_widths = widths
 			}
+		}
 
-			offsets := parse_vec2_pairs(offset_rest)
+		offset_text, offset_ok := meta_value_for_key(text, "frame_center_offsets=")
+		if offset_ok {
+			offsets := parse_vec2_pairs(offset_text)
 			if len(offsets) > 0 {
 				frame_anim_meta[sprite].frame_center_offsets = offsets
+			}
+		}
+
+		sort_foot_text, sort_foot_ok := meta_value_for_key(text, "sort_foot_y=")
+		if sort_foot_ok {
+			sort_foot_y, sort_foot_parse_ok := parse_simple_f32(sort_foot_text)
+			if sort_foot_parse_ok {
+				sprite_sort_foot_y[sprite] = sort_foot_y
+				sprite_sort_foot_y_valid[sprite] = true
 			}
 		}
 	}
@@ -2998,10 +3013,23 @@ draw_terrain_water_tile_sprite :: proc(sprite: Sprite_Name, tile_center: Vec2, t
 }
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {
+	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
+		size := get_sprite_size(e.sprite)
+		frame_width := get_frame_width_px_for_sprite(e.sprite, e.anim_index, size.x)
+		scale_y := e.sort_scale_y
+		if scale_y == 0 {
+			scale_y = 1
+		}
+
+		scaled_size := Vec2{frame_width, size.y * scale_y}
+		min_y := (e.pos - scaled_size * utils.scale_from_pivot(e.draw_pivot) - e.draw_offset).y
+		return min_y + sprite_sort_foot_y[e.sprite]*scale_y
+	}
+
 	hitbox, ok := get_entity_hitbox_rect(e)
 	if ok {
 		// Bottom edge of hitbox is the "feet" depth key.
-		return hitbox.y
+		return hitbox.w
 	}
 	return e.pos.y
 }
@@ -5330,7 +5358,7 @@ setup_bush_ent_common :: proc(e: ^Entity, sprite: Sprite_Name) {
 	e.sprite = sprite
 	e.draw_pivot = .bottom_center
 	e.blocks_player = false
-	e.hide_when_behind = true
+	e.hide_when_behind = false
 	set_entity_durability(e, 0)
 	clear_entity_break_drops(e)
 	e.on_hit_proc = entity_on_hit_noop
