@@ -24,6 +24,7 @@
 - Left-clicking hotbar slots while the inventory panel is closed now equips the slot without picking up/dropping the stack.
 - Closing the inventory overlay now returns held stack and all crafting input items back into inventory (overflow drops near player only if inventory is full), instead of dropping held items on close.
 - Holding right-click while dragging a stack now supports slot-by-slot paint placement: moving over new inventory/crafting slots places one item into each newly hovered slot.
+- Synced all currently pending workspace files in one commit, including water variant image/meta asset updates, removed obsolete water/oblisk metas, and related utility/workbench file changes.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
