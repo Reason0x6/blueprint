@@ -1621,8 +1621,8 @@ game_draw :: proc() {
 
 get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, ok: bool) {
 	#partial switch item {
-	case .sapling:
-		return .sapling, true
+	case .sprout:
+		return .sprout, true
 	case:
 		return .nil, false
 	}
@@ -1630,7 +1630,7 @@ get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, o
 
 get_placeable_preview_pivot :: proc(item: Item_Kind) -> utils.Pivot {
 	#partial switch item {
-	case .sapling:
+	case .sprout:
 		return .bottom_center
 	case:
 		return .center_center
@@ -3326,7 +3326,7 @@ item_name :: proc(item: Item_Kind) -> string {
 	case .fiber: return "Fiber"
 	case .stick: return "Stick"
 	case .rope: return "Rope"
-	case .sapling: return "Sapling"
+	case .sprout: return "sprout"
 	case .stone_blade: return "Stone Blade"
 	case .stone_multitool: return "Stone Multitool"
 	case .oblisk_fragment: return "Fragment"
@@ -3344,7 +3344,7 @@ item_icon_sprite :: proc(item: Item_Kind) -> Sprite_Name {
 	case .fiber: return .fibre
 	case .stick: return .sticks
 	case .rope: return .rope
-	case .sapling: return .sapling
+	case .sprout: return .sprout
 	case .stone_blade: return .stone_blade
 	case .stone_multitool: return .stone_multitool
 	case .oblisk_fragment: return .oblisk_broken
@@ -3362,7 +3362,7 @@ item_max_stack :: proc(item: Item_Kind) -> int {
 	case .fiber: return 99
 	case .stick: return 99
 	case .rope: return 99
-	case .sapling: return 99
+	case .sprout: return 8
 	case .stone_blade: return 99
 	case .stone_multitool: return 1
 	case .oblisk_fragment: return 99
@@ -3380,7 +3380,7 @@ item_hit_cooldown :: proc(item: Item_Kind) -> f64 {
 	case .fiber: return 0.5
 	case .stick: return 0.45
 	case .rope: return 0.5
-	case .sapling: return 0.55
+	case .sprout: return 0.55
 	case .stone_blade: return 0.35
 	case .stone_multitool: return 0.4
 	case .oblisk_fragment: return 0.5
@@ -4277,7 +4277,7 @@ get_place_approach_pos :: proc(player_pos: Vec2, place_pos: Vec2) -> Vec2 {
 
 place_entity_from_item :: proc(item: Item_Kind, pos: Vec2) -> bool {
 	#partial switch item {
-	case .sapling:
+	case .sprout:
 		e := entity_create(.sapling_ent)
 		e.pos = pos
 		return true
@@ -4288,7 +4288,7 @@ place_entity_from_item :: proc(item: Item_Kind, pos: Vec2) -> bool {
 
 try_begin_place_equipped_item :: proc(mouse_world: Vec2) -> bool {
 	item, count := get_equipped_item()
-	if item != .sapling || count <= 0 {
+	if item != .sprout || count <= 0 {
 		return false
 	}
 
@@ -4527,7 +4527,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 		sprout.pos = target.pos
 	}
 	if should_roll_bonus_sapling_drop(target.kind) && roll_chance(0.5, u64(target.handle.id)+u64(ctx.gs.ticks)*733) {
-		spawn_item_pickup_towards_player(.sapling, 1, compute_hit_drop_spawn_pos(target))
+		spawn_item_pickup_towards_player(.sprout, 1, compute_hit_drop_spawn_pos(target))
 	}
 	entity_destroy(target)
 }
