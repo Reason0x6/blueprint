@@ -1725,10 +1725,11 @@ draw_structure_maker_ui :: proc() {
 	row_plus := shape.rect_make(Vec2{panel.x + 186, row_y}, btn_size, pivot=.top_left)
 	save_rect := shape.rect_make(Vec2{panel.x + 214, row_y}, Vec2{46, 12}, pivot=.top_left)
 	clear_rect := shape.rect_make(Vec2{panel.x + 264, row_y}, Vec2{46, 12}, pivot=.top_left)
-	prev_struct_rect := shape.rect_make(Vec2{panel.x + 8, row_y - 34}, Vec2{18, 12}, pivot=.top_left)
-	next_struct_rect := shape.rect_make(Vec2{panel.x + 30, row_y - 34}, Vec2{18, 12}, pivot=.top_left)
-	load_struct_rect := shape.rect_make(Vec2{panel.x + 54, row_y - 34}, Vec2{38, 12}, pivot=.top_left)
-	overwrite_struct_rect := shape.rect_make(Vec2{panel.x + 96, row_y - 34}, Vec2{58, 12}, pivot=.top_left)
+	selector_y := panel.y + 34
+	prev_struct_rect := shape.rect_make(Vec2{panel.x + 8, selector_y}, Vec2{18, 12}, pivot=.bottom_left)
+	next_struct_rect := shape.rect_make(Vec2{panel.x + 30, selector_y}, Vec2{18, 12}, pivot=.bottom_left)
+	load_struct_rect := shape.rect_make(Vec2{panel.x + 54, selector_y}, Vec2{38, 12}, pivot=.bottom_left)
+	overwrite_struct_rect := shape.rect_make(Vec2{panel.x + 96, selector_y}, Vec2{58, 12}, pivot=.bottom_left)
 
 	if draw_structure_maker_button(col_minus, "-A") {
 		ctx.gs.structure_maker_cols = max(1, cols-1)
@@ -1772,7 +1773,7 @@ draw_structure_maker_ui :: proc() {
 		st := terrain_structures[ctx.gs.structure_maker_selected_index]
 		selected_label = fmt.tprintf("Selected: %v (%v x %v)", st.name, st.cols, st.rows)
 	}
-	draw_text(Vec2{panel.x + 160, row_y - 32}, selected_label, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.88, 0.93, 1.0, 0.86}, drop_shadow_col=Vec4{}, scale=0.34)
+	draw_text(Vec2{panel.x + 160, selector_y + 11}, selected_label, pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.88, 0.93, 1.0, 0.86}, drop_shadow_col=Vec4{}, scale=0.34)
 
 	status := "Last save: none"
 	if ctx.gs.structure_maker_last_save_attempted {
@@ -1786,7 +1787,7 @@ draw_structure_maker_ui :: proc() {
 			status = "Save failed"
 		}
 	}
-	draw_text(Vec2{panel.x + 8, row_y - 48}, status, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
+	draw_text(Vec2{panel.x + 8, selector_y + 26}, status, pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
 	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB fwd, RMB back, MMB drag paint", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
 
 	if !key_down(.MIDDLE_MOUSE) {

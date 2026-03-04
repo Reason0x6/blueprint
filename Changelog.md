@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Moved Structure Maker existing-structure controls (`<`, `>`, `Load`, `Overwrite`) and selection/status labels to the panel bottom area so they remain visible/clickable and are no longer obscured by the tile grid.
 - Fixed a Structure Maker/edit-existing crash (`memory could not be read`) by cloning parsed terrain structure names into persistent allocator memory (`context.allocator`) instead of storing temporary string slices from file parse buffers.
 - Changed Structure Maker overlay flow to run as its own paused screen (pause menu hidden while maker is open, and restored on close), preventing simultaneous pause-menu + maker button processing during editor interaction.
 - Hardened Structure Maker UI runtime path by replacing the nested per-frame local button proc with a top-level helper (`draw_structure_maker_button`), avoiding local-proc runtime edge cases when opening/clicking the editor.
