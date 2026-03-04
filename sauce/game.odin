@@ -3016,6 +3016,13 @@ draw_terrain_water_tile_sprite :: proc(sprite: Sprite_Name, tile_center: Vec2, t
 }
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {
+	#partial switch e.kind {
+	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+		// Bush source sheets include large transparent padding below the visible base.
+		// Use the entity anchor as the depth "feet" so crossing the bush base flips order predictably.
+		return e.pos.y
+	}
+
 	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
 		size := get_sprite_size(e.sprite)
 		frame_width := get_frame_width_px_for_sprite(e.sprite, e.anim_index, size.x)

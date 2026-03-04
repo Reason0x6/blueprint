@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Bush draw-order sorting now uses bush anchor feet (`e.pos.y`) instead of opaque-pixel foot metadata, because bush sheets include large transparent bottom padding that otherwise delayed front/back flips; player now moves behind/in-front right when crossing bush base.
 - Fixed sprite-foot depth sorting orientation by converting meta `sort_foot_y` from top-origin image coordinates to in-game bottom-origin coordinates, and restored fallback feet sorting to `hitbox.y` (not `hitbox.w`) so bushes/player front-back ordering now follows feet position correctly.
 - Draw-order sorting now uses sprite meta `sort_foot_y` (opaque-foot pixel) when available, with per-entity `sort_scale_y` support so downscaled sprites (like bushes at `0.5`) sort correctly against the player near their visual base.
 - Added a build-time sprite meta validator (`asset_workbench/ensure_sprite_meta_opaque.ps1`) that scans `res/images/*.png` and appends missing `opaque_bounds`, `sort_foot_x`, and `sort_foot_y` fields to matching `.meta` files; `build.bat` now runs this check before compiling.
