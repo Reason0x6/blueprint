@@ -1624,8 +1624,7 @@ world_area_coords_from_key :: proc(key: u64) -> (int, int) {
 }
 
 world_area_coord_for_tile :: proc(tile_coord: int) -> int {
-	half := WORLD_UNLOCK_AREA_SIZE_TILES / 2
-	return floor_div_int(tile_coord+half, WORLD_UNLOCK_AREA_SIZE_TILES)
+	return floor_div_int(tile_coord, WORLD_UNLOCK_AREA_SIZE_TILES)
 }
 
 world_area_for_world_pos :: proc(pos: Vec2) -> (int, int) {
