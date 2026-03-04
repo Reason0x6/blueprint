@@ -142,6 +142,8 @@ Inventory_State :: struct {
 	crafting_slots: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot,
 	crafting_output: Inventory_Slot,
 	crafting_recipe_index: int,
+	right_drag_last_slot: int,
+	right_drag_last_kind: Drag_From_Kind,
 }
 
 CRAFT_INPUT_COLS :: 2
@@ -3253,6 +3255,8 @@ clear_inventory_drag :: proc(inv: ^Inventory_State) {
 	inv.drag_from_slot = -1
 	inv.drag_from_kind = .none
 	inv.drag_slot = {}
+	inv.right_drag_last_slot = -1
+	inv.right_drag_last_kind = .none
 }
 
 pick_up_slot_into_hand :: proc(inv: ^Inventory_State, slot: ^Inventory_Slot, from_kind: Drag_From_Kind, from_slot: int) -> bool {
@@ -3388,24 +3392,44 @@ draw_inventory_ui :: proc() {
 		}
 	}
 
-	if key_pressed(.RIGHT_MOUSE) && inv.dragging {
-		consumed_click := false
+	if key_down(.RIGHT_MOUSE) && inv.dragging {
+		target_kind := Drag_From_Kind.none
+		target_slot := -1
+		target_is_crafting := false
+
 		slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
 		if slot_ok {
-			inv.equipped_slot = slot_index
-			_ = place_held_one(inv, &inv.slots[slot_index])
-			consumed_click = true
+			target_kind = .inventory
+			target_slot = slot_index
 		} else {
 			craft_i, craft_ok := find_crafting_input_slot_at_mouse(inv, mouse_pos)
 			if craft_ok {
-				_ = place_held_one(inv, &inv.crafting_slots[craft_i])
-				update_crafting_output(inv)
-				consumed_click = true
+				target_kind = .craft_input
+				target_slot = craft_i
+				target_is_crafting = true
 			}
 		}
-		if consumed_click {
-			consume_key_pressed(.RIGHT_MOUSE)
+
+		is_new_target := target_kind != inv.right_drag_last_kind || target_slot != inv.right_drag_last_slot
+		if target_kind != .none && (key_pressed(.RIGHT_MOUSE) || is_new_target) {
+			if target_kind == .inventory {
+				inv.equipped_slot = target_slot
+				_ = place_held_one(inv, &inv.slots[target_slot])
+			} else if target_is_crafting {
+				_ = place_held_one(inv, &inv.crafting_slots[target_slot])
+				update_crafting_output(inv)
+			}
+			inv.right_drag_last_kind = target_kind
+			inv.right_drag_last_slot = target_slot
+		} else if target_kind == .none {
+			inv.right_drag_last_kind = .none
+			inv.right_drag_last_slot = -1
 		}
+	}
+
+	if key_released(.RIGHT_MOUSE) {
+		inv.right_drag_last_kind = .none
+		inv.right_drag_last_slot = -1
 	}
 
 	// Hotbar

@@ -23,6 +23,7 @@
 - Slightly zoomed out the world camera by reducing `get_camera_zoom` scale to `95%` of the previous value.
 - Left-clicking hotbar slots while the inventory panel is closed now equips the slot without picking up/dropping the stack.
 - Closing the inventory overlay now returns held stack and all crafting input items back into inventory (overflow drops near player only if inventory is full), instead of dropping held items on close.
+- Holding right-click while dragging a stack now supports slot-by-slot paint placement: moving over new inventory/crafting slots places one item into each newly hovered slot.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
