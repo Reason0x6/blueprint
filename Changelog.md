@@ -46,6 +46,7 @@
 - Chunk structure spawning now rejects placements that overlap the player hitbox and retries deterministic candidate placements, preventing startup/player trapping when structures generate near spawn.
 - Added timed plant growth with per-entity randomness: sprouts grow into saplings at ~60s (`+/-` jitter), and saplings grow into trees at ~120s (`+/-` jitter).
 - Growth now retries after a short delay if the next growth stage would overlap the player hitbox, preventing forced player trapping during transformation.
+- Added a pause-menu debug toggle (`Growth: ON/OFF`) to show growth countdown overlays for sprouts/saplings, including seconds remaining until next stage.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

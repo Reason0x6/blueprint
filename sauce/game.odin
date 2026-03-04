@@ -57,6 +57,7 @@ Game_State :: struct {
 	debug_show_hitboxes: bool,
 	debug_show_overlap_boxes: bool,
 	debug_show_durability: bool,
+	debug_show_growth: bool,
 	debug_show_grid: bool,
 	hold_hit_target: Entity_Handle,
 	has_hold_hit_target: bool,
@@ -1200,7 +1201,7 @@ draw_pause_menu_ui :: proc() {
 	draw_rect(screen_rect, col=Vec4{0.5, 0.5, 0.5, 0.35}, z_layer=.pause_menu)
 
 	cx, cy := screen_pivot(.center_center)
-	panel_size := Vec2{190, 190}
+	panel_size := Vec2{190, 236}
 	panel := shape.rect_make(Vec2{cx, cy}, panel_size, pivot=.center_center)
 	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.92}, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
 	draw_text(Vec2{cx, cy + 76}, "Paused", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
@@ -1278,6 +1279,20 @@ draw_pause_menu_ui :: proc() {
 	grid_center := (grid_rect.xy + grid_rect.zw) * 0.5
 	draw_text(grid_center, grid_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
 
+	growth_rect := shape.rect_make(debug_start + Vec2{0, -72}, debug_button_size, pivot=.center_center)
+	growth_hover, growth_pressed := raw_button(growth_rect)
+	if growth_pressed {
+		ctx.gs.debug_show_growth = !ctx.gs.debug_show_growth
+	}
+	growth_col := Vec4{0.05, 0.05, 0.05, 0.78}
+	if growth_hover {
+		growth_col = Vec4{0.2, 0.2, 0.2, 0.85}
+	}
+	draw_rect(growth_rect, col=growth_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	growth_label := ctx.gs.debug_show_growth ? "Growth: ON" : "Growth: OFF"
+	growth_center := (growth_rect.xy + growth_rect.zw) * 0.5
+	draw_text(growth_center, growth_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+
 	player := get_player()
 	area_label := "Area: n/a"
 	player_area_x, player_area_y := 0, 0
@@ -1286,9 +1301,9 @@ draw_pause_menu_ui :: proc() {
 		player_area_x, player_area_y = world_area_for_world_pos(player.pos)
 		area_label = fmt.tprintf("Area: %v,%v", player_area_x, player_area_y)
 	}
-	draw_text(Vec2{cx, cy - 58}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
+	draw_text(Vec2{cx, cy - 74}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
 
-	unlock_here_rect := shape.rect_make(Vec2{cx, cy - 74}, Vec2{124, 16}, pivot=.center_center)
+	unlock_here_rect := shape.rect_make(Vec2{cx, cy - 90}, Vec2{124, 16}, pivot=.center_center)
 	unlock_here_hover, unlock_here_pressed := raw_button(unlock_here_rect)
 	unlock_here_col := Vec4{0.05, 0.08, 0.05, 0.78}
 	if unlock_here_hover {
@@ -1300,7 +1315,7 @@ draw_pause_menu_ui :: proc() {
 		_ = unlock_world_area(player_area_x, player_area_y)
 	}
 
-	unlock_adj_rect := shape.rect_make(Vec2{cx, cy - 92}, Vec2{124, 16}, pivot=.center_center)
+	unlock_adj_rect := shape.rect_make(Vec2{cx, cy - 108}, Vec2{124, 16}, pivot=.center_center)
 	unlock_adj_hover, unlock_adj_pressed := raw_button(unlock_adj_rect)
 	unlock_adj_col := Vec4{0.05, 0.08, 0.05, 0.78}
 	if unlock_adj_hover {
@@ -1536,6 +1551,12 @@ game_draw :: proc() {
 			for handle in get_all_ents() {
 				e := entity_from_handle(handle)
 				draw_entity_durability_debug(e^)
+			}
+		}
+		if ctx.gs.debug_show_growth {
+			for handle in get_all_ents() {
+				e := entity_from_handle(handle)
+				draw_entity_growth_debug(e^)
 			}
 		}
 
@@ -2869,6 +2890,32 @@ draw_entity_durability_debug :: proc(e: Entity) {
 
 	label := fmt.tprintf("%v", e.durability)
 	draw_text(pos, label, pivot=.bottom_center, z_layer=.top, col=Vec4{1, 0.95, 0.35, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.8})
+}
+
+draw_entity_growth_debug :: proc(e: Entity) {
+	if e.kind != .sapling_ent && e.kind != .sprout_ent {
+		return
+	}
+	if e.growth_ready_time <= 0 {
+		return
+	}
+
+	remaining := max(0.0, e.growth_ready_time-now())
+	remaining_sec := int(math.ceil(remaining))
+	next_stage := "Sapling" if e.kind == .sprout_ent else "Tree"
+	label := fmt.tprintf("%v: %vs", next_stage, remaining_sec)
+
+	pos := e.pos + Vec2{0, 16}
+	sprite_rect, ok := get_entity_sprite_rect(e)
+	if ok {
+		pos = Vec2{(sprite_rect.x + sprite_rect.z) * 0.5, sprite_rect.w + 10}
+	}
+
+	layer: ZLayer = .top
+	if is_game_paused() {
+		layer = .pause_menu
+	}
+	draw_text(pos, label, pivot=.bottom_center, z_layer=layer, col=Vec4{0.72, 1.0, 0.72, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.85}, scale=0.45)
 }
 
 draw_player_hit_cooldown_bar :: proc() {
