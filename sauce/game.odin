@@ -3218,12 +3218,12 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		size := get_sprite_size(e.sprite)
 		center := e.pos + Vec2{0, 0}
 		return shape.rect_make(center, Vec2{50, 30}, pivot=.bottom_center), true
-	case .sapling_ent:
-		center := e.pos + Vec2{0, 0}
-		return shape.rect_make(center , Vec2{18, 20}, pivot=.bottom_center), true
 	case .sprout_ent:
 		center := e.pos + Vec2{0, 0}
 		return shape.rect_make(center , Vec2{15, 15}, pivot=.bottom_center), true
+	case .sapling_ent:
+		center := e.pos + Vec2{0, 0}
+		return shape.rect_make(center , Vec2{18, 20}, pivot=.bottom_center), true
 	case .bush_1_ent, .bush_3_ent, .bush_4_ent:
 		center := e.pos + Vec2{0, 24}
 		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true
@@ -4354,7 +4354,7 @@ get_place_approach_pos :: proc(player_pos: Vec2, place_pos: Vec2) -> Vec2 {
 place_entity_from_item :: proc(item: Item_Kind, pos: Vec2) -> bool {
 	#partial switch item {
 	case .sprout:
-		e := entity_create(.sapling_ent)
+		e := entity_create(.sprout_ent)
 		e.pos = pos
 		return true
 	case:

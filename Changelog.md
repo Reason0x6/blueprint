@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Synced all currently pending workspace updates into one commit, including latest tree/sapling/sprout image/meta asset edits and in-progress `game.odin` gameplay code changes.
 - Overlap debug visuals (blue) now also use strict edge-line rendering (4 border quads), matching entity hitboxes and guaranteeing outline-only display without interior fill.
 - Entity hitbox debug visuals (red) now use strict edge-line rendering (4 border quads) instead of `draw_rect` outline mode, ensuring they are always outline-only with no interior fill.
 - Water collision debug overlays now render as outline-only boxes (no fill), matching the hitbox/overlap outline style.
