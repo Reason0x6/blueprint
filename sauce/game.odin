@@ -1533,6 +1533,16 @@ game_draw :: proc() {
 
 		draw_player_hit_cooldown_bar()
 	}
+
+	// HUD: FPS counter (smoothed enough by frame cadence for debug usage).
+	{
+		push_coord_space(get_screen_space())
+		fps := 0
+		if ctx.delta_t > 0 {
+			fps = int(math.round(1.0 / ctx.delta_t))
+		}
+		draw_text(Vec2{6, f32(GAME_RES_HEIGHT) - 6}, fmt.tprintf("FPS: %v", fps), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.75}, scale=0.45)
+	}
 }
 
 get_placeable_preview_sprite :: proc(item: Item_Kind) -> (sprite: Sprite_Name, ok: bool) {
