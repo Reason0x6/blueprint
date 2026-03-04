@@ -2409,7 +2409,7 @@ draw_water_collision_debug :: proc() {
 				}
 			}
 
-			draw_rect(debug_rect, col=Vec4{0.2, 0.75, 1.0, 0.12}, outline_col=Vec4{0.2, 0.75, 1.0, 0.82}, z_layer=layer)
+			draw_rect(debug_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.75, 1.0, 0.82}, z_layer=layer)
 			tx += 1
 		}
 		ty += 1
@@ -3193,9 +3193,11 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		center := e.pos + Vec2{0, 0}
 		return shape.rect_make(center, Vec2{50, 30}, pivot=.bottom_center), true
 	case .sapling_ent:
-		return shape.rect_make(e.pos , Vec2{18, 13}, pivot=.bottom_center), true
+		center := e.pos + Vec2{0, 0}
+		return shape.rect_make(center , Vec2{18, 20}, pivot=.bottom_center), true
 	case .sprout_ent:
-		return shape.rect_make(e.pos , Vec2{15, 10}, pivot=.bottom_center), true
+		center := e.pos + Vec2{0, 0}
+		return shape.rect_make(center , Vec2{15, 15}, pivot=.bottom_center), true
 	case .bush_1_ent, .bush_3_ent, .bush_4_ent:
 		center := e.pos + Vec2{0, 24}
 		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true

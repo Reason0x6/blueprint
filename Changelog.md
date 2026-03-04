@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Water collision debug overlays now render as outline-only boxes (no fill), matching the hitbox/overlap outline style.
 - Reverted the temporary bush sort-foot switch to hitbox-bottom and restored bush depth/debug feet to the visual-base offset path (`e.pos + Vec2{0, 32}`).
 - When `Hitboxes` debug is enabled, the game now also draws a small white dot per entity at its computed depth-sort feet position (`get_entity_sort_feet_pos`) so sprite-foot ordering can be visually verified in-world.
 - Depth ordering now sorts entities by feet in screen-space Y (top to bottom), and behind-fade checks now use the same screen-space comparison; this makes front/behind behavior match visual position on screen (lower feet render in front, higher feet render behind).
