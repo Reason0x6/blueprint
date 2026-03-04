@@ -72,6 +72,7 @@ Game_State :: struct {
 	inventory: Inventory_State,
 	spawned_vegetation_chunks: [dynamic]u64,
 	terrain_structure_instances: [dynamic]Terrain_Structure_Instance,
+	unlocked_world_areas: [dynamic]u64,
 
 	scratch: struct {
 		all_entities: []Entity_Handle,
@@ -152,6 +153,7 @@ CRAFT_INPUT_SLOT_COUNT :: CRAFT_INPUT_COLS * CRAFT_INPUT_ROWS
 MAX_TERRAIN_STRUCTURES :: 64
 MAX_TERRAIN_STRUCTURE_ROWS :: 64
 MAX_TERRAIN_STRUCTURE_COLS :: 64
+WORLD_UNLOCK_AREA_SIZE_TILES :: 16
 
 Drag_From_Kind :: enum u8 {
 	none,
@@ -1190,13 +1192,13 @@ draw_pause_menu_ui :: proc() {
 	draw_rect(screen_rect, col=Vec4{0.5, 0.5, 0.5, 0.35}, z_layer=.pause_menu)
 
 	cx, cy := screen_pivot(.center_center)
-	panel_size := Vec2{190, 142}
+	panel_size := Vec2{190, 190}
 	panel := shape.rect_make(Vec2{cx, cy}, panel_size, pivot=.center_center)
 	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.92}, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
-	draw_text(Vec2{cx, cy + 52}, "Paused", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
+	draw_text(Vec2{cx, cy + 76}, "Paused", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{})
 
 	button_size := Vec2{78, 18}
-	resume_rect := shape.rect_make(Vec2{cx, cy + 24}, button_size, pivot=.center_center)
+	resume_rect := shape.rect_make(Vec2{cx, cy + 48}, button_size, pivot=.center_center)
 	resume_hover, resume_pressed := raw_button(resume_rect)
 	resume_col := Vec4{0.1, 0.1, 0.1, 0.9}
 	if resume_hover {
@@ -1210,7 +1212,7 @@ draw_pause_menu_ui :: proc() {
 	}
 
 	debug_button_size := Vec2{124, 16}
-	debug_start := Vec2{cx, cy - 2}
+	debug_start := Vec2{cx, cy + 22}
 
 	hitboxes_rect := shape.rect_make(debug_start, debug_button_size, pivot=.center_center)
 	hitboxes_hover, hitboxes_pressed := raw_button(hitboxes_rect)
@@ -1267,6 +1269,40 @@ draw_pause_menu_ui :: proc() {
 	grid_label := ctx.gs.debug_show_grid ? "Grid: ON" : "Grid: OFF"
 	grid_center := (grid_rect.xy + grid_rect.zw) * 0.5
 	draw_text(grid_center, grid_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+
+	player := get_player()
+	area_label := "Area: n/a"
+	player_area_x, player_area_y := 0, 0
+	player_valid := is_valid(player^)
+	if player_valid {
+		player_area_x, player_area_y = world_area_for_world_pos(player.pos)
+		area_label = fmt.tprintf("Area: %v,%v", player_area_x, player_area_y)
+	}
+	draw_text(Vec2{cx, cy - 58}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
+
+	unlock_here_rect := shape.rect_make(Vec2{cx, cy - 74}, Vec2{124, 16}, pivot=.center_center)
+	unlock_here_hover, unlock_here_pressed := raw_button(unlock_here_rect)
+	unlock_here_col := Vec4{0.05, 0.08, 0.05, 0.78}
+	if unlock_here_hover {
+		unlock_here_col = Vec4{0.16, 0.22, 0.16, 0.86}
+	}
+	draw_rect(unlock_here_rect, col=unlock_here_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	draw_text((unlock_here_rect.xy+unlock_here_rect.zw)*0.5, "Unlock Here", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	if unlock_here_pressed && player_valid {
+		_ = unlock_world_area(player_area_x, player_area_y)
+	}
+
+	unlock_adj_rect := shape.rect_make(Vec2{cx, cy - 92}, Vec2{124, 16}, pivot=.center_center)
+	unlock_adj_hover, unlock_adj_pressed := raw_button(unlock_adj_rect)
+	unlock_adj_col := Vec4{0.05, 0.08, 0.05, 0.78}
+	if unlock_adj_hover {
+		unlock_adj_col = Vec4{0.16, 0.22, 0.16, 0.86}
+	}
+	draw_rect(unlock_adj_rect, col=unlock_adj_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	draw_text((unlock_adj_rect.xy+unlock_adj_rect.zw)*0.5, "Unlock Adjacent", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	if unlock_adj_pressed && player_valid {
+		unlock_world_area_with_adjacent(player_area_x, player_area_y)
+	}
 }
 
 app_shutdown :: proc() {
@@ -1300,6 +1336,8 @@ game_update :: proc() {
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.debug_show_grid = false
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
+		ctx.gs.unlocked_world_areas = make([dynamic]u64, 0, 64, allocator=context.allocator)
+		_ = unlock_world_area_for_world_pos(player.pos)
 		_ = spawn_terrain_structure("island_1", Vec2{0,0})
 
 		oblisk := entity_create(.oblisk_ent)
@@ -1560,6 +1598,82 @@ floor_div_int :: proc(v: int, d: int) -> int {
 		q -= 1
 	}
 	return q
+}
+
+make_world_area_key :: proc(area_x: int, area_y: int) -> u64 {
+	ux := u64(u32(area_x))
+	uy := u64(u32(area_y))
+	return (ux << 32) | uy
+}
+
+world_area_coord_for_tile :: proc(tile_coord: int) -> int {
+	half := WORLD_UNLOCK_AREA_SIZE_TILES / 2
+	return floor_div_int(tile_coord+half, WORLD_UNLOCK_AREA_SIZE_TILES)
+}
+
+world_area_for_world_pos :: proc(pos: Vec2) -> (int, int) {
+	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
+	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
+	return world_area_coord_for_tile(tile_x), world_area_coord_for_tile(tile_y)
+}
+
+is_world_area_unlocked :: proc(area_x: int, area_y: int) -> bool {
+	key := make_world_area_key(area_x, area_y)
+	for k in ctx.gs.unlocked_world_areas {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
+unlock_world_area :: proc(area_x: int, area_y: int) -> bool {
+	if is_world_area_unlocked(area_x, area_y) {
+		return false
+	}
+	append(&ctx.gs.unlocked_world_areas, make_world_area_key(area_x, area_y))
+	return true
+}
+
+unlock_world_area_for_world_pos :: proc(pos: Vec2) -> bool {
+	ax, ay := world_area_for_world_pos(pos)
+	return unlock_world_area(ax, ay)
+}
+
+unlock_world_area_with_adjacent :: proc(area_x: int, area_y: int) {
+	for oy := -1; oy <= 1; oy += 1 {
+		for ox := -1; ox <= 1; ox += 1 {
+			_ = unlock_world_area(area_x+ox, area_y+oy)
+		}
+	}
+}
+
+is_tile_in_unlocked_world :: proc(tile_x: int, tile_y: int) -> bool {
+	ax := world_area_coord_for_tile(tile_x)
+	ay := world_area_coord_for_tile(tile_y)
+	return is_world_area_unlocked(ax, ay)
+}
+
+is_world_pos_in_locked_area :: proc(pos: Vec2) -> bool {
+	tile_x := int(math.floor(pos.x / ENTITY_GRID_SIZE))
+	tile_y := int(math.floor(pos.y / ENTITY_GRID_SIZE))
+	return !is_tile_in_unlocked_world(tile_x, tile_y)
+}
+
+is_rect_touching_locked_world_area :: proc(rect: shape.Rect) -> bool {
+	min_tile_x := int(math.floor(rect.x / ENTITY_GRID_SIZE))
+	max_tile_x := int(math.floor(rect.z / ENTITY_GRID_SIZE))
+	min_tile_y := int(math.floor(rect.y / ENTITY_GRID_SIZE))
+	max_tile_y := int(math.floor(rect.w / ENTITY_GRID_SIZE))
+
+	for ty := min_tile_y; ty <= max_tile_y; ty += 1 {
+		for tx := min_tile_x; tx <= max_tile_x; tx += 1 {
+			if !is_tile_in_unlocked_world(tx, ty) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 sprite_is_loaded :: proc(sprite: Sprite_Name) -> bool {
@@ -2200,6 +2314,14 @@ draw_world_terrain_tiles :: proc() {
 	for ty <= max_tile_y {
 		tx := min_tile_x
 		for tx <= max_tile_x {
+			if !is_tile_in_unlocked_world(tx, ty) {
+				tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
+				tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
+				draw_rect(tile_rect, col=Vec4{0.01, 0.01, 0.01, 0.96})
+				tx += 1
+				continue
+			}
+
 			tile := terrain_tile_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
@@ -2605,7 +2727,7 @@ resolve_player_vs_hitboxes :: proc() {
 
 	// Terrain collision fallback: water uses texture alpha, blocks use per-block hitbox config.
 	player_hitbox, ok = get_entity_hitbox_rect(player^)
-	if ok && (is_rect_touching_water_collision(player_hitbox) || is_rect_touching_terrain_block_collision(player_hitbox)) {
+	if ok && (is_rect_touching_locked_world_area(player_hitbox) || is_rect_touching_water_collision(player_hitbox) || is_rect_touching_terrain_block_collision(player_hitbox)) {
 		player.pos = prev_pos
 		player.has_move_target = false
 		player.has_queued_move_target = false
@@ -3991,6 +4113,10 @@ set_player_move_target_with_detour :: proc(player: ^Entity, target: Vec2) {
 }
 
 is_world_position_blocked_for_player :: proc(pos: Vec2) -> bool {
+	if is_world_pos_in_locked_area(pos) {
+		return true
+	}
+
 	if is_world_pos_in_water_collision(pos) {
 		return true
 	}
@@ -4017,6 +4143,10 @@ is_player_hitbox_blocked_at_pos :: proc(player: ^Entity, pos: Vec2) -> bool {
 	player_hitbox, ok := get_entity_hitbox_rect(probe)
 	if !ok {
 		return false
+	}
+
+	if is_rect_touching_locked_world_area(player_hitbox) {
+		return true
 	}
 
 	if is_rect_touching_water_collision(player_hitbox) {

@@ -25,6 +25,9 @@
 - Closing the inventory overlay now returns held stack and all crafting input items back into inventory (overflow drops near player only if inventory is full), instead of dropping held items on close.
 - Holding right-click while dragging a stack now supports slot-by-slot paint placement: moving over new inventory/crafting slots places one item into each newly hovered slot.
 - Synced all currently pending workspace files in one commit, including water variant image/meta asset updates, removed obsolete water/oblisk metas, and related utility/workbench file changes.
+- Added unlockable world areas using `16x16` tile regions: player now starts with only the current area unlocked, and movement/targeting is blocked in locked regions.
+- Locked regions now render as dark tiles, while unlocked regions render normal terrain/collision.
+- Added pause-menu debug controls for area progression: `Unlock Here` (current area) and `Unlock Adjacent` (3x3 around current area), plus current area coordinate display.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
