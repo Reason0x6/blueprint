@@ -322,6 +322,10 @@ Entity_Kind :: enum {
 	tree_ent,
 	sapling_ent,
 	sprout_ent,
+	bush_1_ent,
+	bush_2_ent,
+	bush_3_ent,
+	bush_4_ent,
 	grass_ent,
 	item_pickup,
 	dagger_projectile,
@@ -340,6 +344,10 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 		case .tree_ent: setup_tree_ent(e)
 		case .sapling_ent: setup_sapling_ent(e)
 		case .sprout_ent: setup_sprout_ent(e)
+		case .bush_1_ent: setup_bush_1_ent(e)
+		case .bush_2_ent: setup_bush_2_ent(e)
+		case .bush_3_ent: setup_bush_3_ent(e)
+		case .bush_4_ent: setup_bush_4_ent(e)
 		case .grass_ent: setup_grass_ent(e)
 		case .item_pickup: setup_item_pickup(e)
 		case .dagger_projectile: setup_dagger_projectile(e)
@@ -410,6 +418,10 @@ Sprite_Name :: enum {
 	stone_multitool_swing,
 	sapling,
 	sprout,
+	bushes_bush_1,
+	bushes_bush_2,
+	bushes_bush_3,
+	bushes_bush_4,
 	tree,
 	oblisk,
 	oblisk_rest,
@@ -440,6 +452,10 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.movement_indicator = {frame_count=6},
 	.grass = {frame_count=6},
 	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_1 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_2 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_3 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_4 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 
@@ -1371,6 +1387,14 @@ game_update :: proc() {
 		sapling.pos = manual_spawn_world_pos_for_hitbox(Vec2{-40, 0}, Vec2{18, 13}, .bottom_center)
 		sprout := entity_create(.sprout_ent)
 		sprout.pos = manual_spawn_world_pos_for_hitbox(Vec2{-80, 0}, Vec2{15, 10}, .bottom_center)
+		bush1 := entity_create(.bush_1_ent)
+		bush1.pos = manual_spawn_world_pos(Vec2{40, -40})
+		bush2 := entity_create(.bush_2_ent)
+		bush2.pos = manual_spawn_world_pos(Vec2{72, -40})
+		bush3 := entity_create(.bush_3_ent)
+		bush3.pos = manual_spawn_world_pos(Vec2{104, -40})
+		bush4 := entity_create(.bush_4_ent)
+		bush4.pos = manual_spawn_world_pos(Vec2{136, -40})
 
 		spawn_item_pickup(.wood, 4, manual_spawn_world_pos(Vec2{-68, 8}))
 		spawn_item_pickup(.stone, 3, manual_spawn_world_pos(Vec2{-86, 8}))
@@ -5286,6 +5310,52 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	e.draw_proc = proc(e: Entity) {
 		draw_entity_default(e)
 	}
+}
+
+setup_bush_ent_common :: proc(e: ^Entity, sprite: Sprite_Name) {
+	e.kind = .nil
+	e.sprite = sprite
+	e.draw_pivot = .bottom_center
+	e.blocks_player = false
+	set_entity_durability(e, 0)
+	clear_entity_break_drops(e)
+	e.on_hit_proc = entity_on_hit_noop
+	e.loop = true
+	e.frame_duration = 0.12
+
+	frame_count := get_frame_count(sprite)
+	if frame_count > 1 {
+		e.anim_index = e.handle.id % frame_count
+	} else {
+		e.anim_index = 0
+	}
+
+	e.update_proc = proc(_: ^Entity) {}
+	e.draw_proc = proc(e: Entity) {
+		e0 := e
+		xform := utils.xform_scale(Vec2{0.5, 0.5})
+		draw_sprite_entity(&e0, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot)
+	}
+}
+
+setup_bush_1_ent :: proc(using e: ^Entity) {
+	setup_bush_ent_common(e, .bushes_bush_1)
+	kind = .bush_1_ent
+}
+
+setup_bush_2_ent :: proc(using e: ^Entity) {
+	setup_bush_ent_common(e, .bushes_bush_2)
+	kind = .bush_2_ent
+}
+
+setup_bush_3_ent :: proc(using e: ^Entity) {
+	setup_bush_ent_common(e, .bushes_bush_3)
+	kind = .bush_3_ent
+}
+
+setup_bush_4_ent :: proc(using e: ^Entity) {
+	setup_bush_ent_common(e, .bushes_bush_4)
+	kind = .bush_4_ent
 }
 
 setup_grass_ent :: proc(using e: ^Entity) {

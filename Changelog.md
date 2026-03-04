@@ -48,6 +48,8 @@
 - Growth now retries after a short delay if the next growth stage would overlap the player hitbox, preventing forced player trapping during transformation.
 - Added a pause-menu debug toggle (`Growth: ON/OFF`) to show growth countdown overlays for sprouts/saplings, including seconds remaining until next stage.
 - Fixed placeable preview alignment by matching preview pivot to placed entity pivot (saplings now preview with `bottom_center`), so placement lands where preview indicates.
+- Added four animated bush entities (`bush_1_ent`..`bush_4_ent`) sourced from `Bushes_Bush 1..4` assets, each configured as 8-frame looping world entities.
+- Added engine-friendly bush sprite asset copies (`bushes_bush_1..4.png/.meta`) and render-time downscaling to `64x64` in-world via `0.5` draw scale from their `128x128` source frames.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
