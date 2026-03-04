@@ -52,6 +52,7 @@
 - Added engine-friendly bush sprite asset copies (`bushes_bush_1..4.png/.meta`) and render-time downscaling to `64x64` in-world via `0.5` draw scale from their `128x128` source frames.
 - Fixed startup crash (`failed to pack all the rects, ran out of space?`) by increasing texture atlas packing size from `1024` to `2048` in `core_render.odin`.
 - Added explicit bush entity hitboxes (`30x18`, bottom-centered) for `bush_1_ent..bush_4_ent`, while keeping per-bush overlap boxes from sprite data so both collision and overlap debugging are defined per bush type.
+- Bush draw path now applies the same overlap-based fade logic (`is_player_behind_entity`) as default entities, so bush overlap boxes affect behind/in-front transparency behavior as expected.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

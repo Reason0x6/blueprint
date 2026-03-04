@@ -452,10 +452,10 @@ sprite_data: [Sprite_Name]Sprite_Data = #partial {
 	.movement_indicator = {frame_count=6},
 	.grass = {frame_count=6},
 	.sprout = {overlap_box_size=Vec2{10, 8}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
-	.bushes_bush_1 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
-	.bushes_bush_2 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
-	.bushes_bush_3 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
-	.bushes_bush_4 = {frame_count=8, overlap_box_size=Vec2{30, 18}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_1 = {frame_count=8, overlap_box_size=Vec2{30, 6}, overlap_box_offset=Vec2{0, 32}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_2 = {frame_count=8, overlap_box_size=Vec2{30, 6}, overlap_box_offset=Vec2{0, 32}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_3 = {frame_count=8, overlap_box_size=Vec2{30, 6}, overlap_box_offset=Vec2{0, 32}, overlap_box_pivot=.bottom_center},
+	.bushes_bush_4 = {frame_count=8, overlap_box_size=Vec2{30, 6}, overlap_box_offset=Vec2{0, 32}, overlap_box_pivot=.bottom_center},
 	.sapling = {overlap_box_size=Vec2{16, 14}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 	.tree = {overlap_box_size=Vec2{48, 103}, overlap_box_offset=Vec2{0, 0}, overlap_box_pivot=.bottom_center},
 
@@ -3095,7 +3095,8 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 	case .sprout_ent:
 		return shape.rect_make(e.pos , Vec2{15, 10}, pivot=.bottom_center), true
 	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
-		return shape.rect_make(e.pos, Vec2{30, 18}, pivot=.bottom_center), true
+		center := e.pos + Vec2{0, 24}
+		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -5336,7 +5337,11 @@ setup_bush_ent_common :: proc(e: ^Entity, sprite: Sprite_Name) {
 	e.draw_proc = proc(e: Entity) {
 		e0 := e
 		xform := utils.xform_scale(Vec2{0.5, 0.5})
-		draw_sprite_entity(&e0, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot)
+		entity_col := color.WHITE
+		if is_player_behind_entity(e) {
+			entity_col.a = 0.3
+		}
+		draw_sprite_entity(&e0, e.pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot, col=entity_col)
 	}
 }
 
