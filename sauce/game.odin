@@ -180,6 +180,7 @@ Terrain_Tile :: struct {
 	kind: Terrain_Tile_Kind,
 	block_index: int,
 	water_variant: int,
+	water_flip_x: bool,
 }
 
 Terrain_Structure :: struct {
@@ -862,17 +863,23 @@ parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 		}
 	}
 
+	flip_x := false
+	if len(t) >= 2 && strings.has_suffix(t, "a") {
+		flip_x = true
+		t = t[:len(t)-1]
+	}
+
 	if t == "water" || t == "water_1" || t == "0" {
-		return Terrain_Tile{kind=.water, water_variant=1}, true
+		return Terrain_Tile{kind=.water, water_variant=1, water_flip_x=flip_x}, true
 	}
 	if t == "water_2" || t == "-1" {
-		return Terrain_Tile{kind=.water, water_variant=2}, true
+		return Terrain_Tile{kind=.water, water_variant=2, water_flip_x=flip_x}, true
 	}
 	if t == "water_3" || t == "-2" {
-		return Terrain_Tile{kind=.water, water_variant=3}, true
+		return Terrain_Tile{kind=.water, water_variant=3, water_flip_x=flip_x}, true
 	}
 	if t == "water_4" || t == "-3" {
-		return Terrain_Tile{kind=.water, water_variant=4}, true
+		return Terrain_Tile{kind=.water, water_variant=4, water_flip_x=flip_x}, true
 	}
 	if t == "_" || t == "." || t == "empty" {
 		return Terrain_Tile{kind=.empty}, true
@@ -880,7 +887,7 @@ parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 
 	signed, signed_ok := parse_signed_int_str(t)
 	if signed_ok && signed <= 0 && signed >= -3 {
-		return Terrain_Tile{kind=.water, water_variant=1-signed}, true
+		return Terrain_Tile{kind=.water, water_variant=1-signed, water_flip_x=flip_x}, true
 	}
 
 	block_index, ok := parse_positive_int_str(t)
@@ -1789,6 +1796,9 @@ is_water_pixel_blocked :: proc(tile_x: int, tile_y: int, world_pos: Vec2) -> boo
 	tile_min_y := f32(tile_y) * grid
 	u := math.clamp((world_pos.x-tile_min_x)/grid, 0, 0.9999)
 	v := math.clamp((world_pos.y-tile_min_y)/grid, 0, 0.9999)
+	if tile.water_flip_x {
+		u = 1.0 - u
+	}
 
 	px := clamp(int(math.floor(u * f32(mask.width))), 0, mask.width-1)
 	py := clamp(int(math.floor(v * f32(mask.height))), 0, mask.height-1)
@@ -2198,7 +2208,7 @@ draw_world_terrain_tiles :: proc() {
 			// Water underlay for non-water tiles so transparent pixels reveal water below.
 			if tile.kind != .water {
 				if sprite_is_loaded(water_sprite) {
-					draw_sprite_in_rect(water_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+					draw_terrain_water_tile_sprite(water_sprite, tile_center, tile_size, tile.water_flip_x)
 				} else {
 					draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
 				}
@@ -2208,7 +2218,7 @@ draw_world_terrain_tiles :: proc() {
 
 			if tile.kind == .water {
 				if sprite_is_loaded(water_sprite) {
-					draw_sprite_in_rect(water_sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+					draw_terrain_water_tile_sprite(water_sprite, tile_center, tile_size, tile.water_flip_x)
 				}
 			} else if tile.kind == .block {
 				if sprite_is_loaded(.tilemap_color1) {
@@ -2216,7 +2226,7 @@ draw_world_terrain_tiles :: proc() {
 				}
 			}
 			if ctx.gs.debug_show_grid {
-				label := tile.kind == .water ? fmt.tprintf("w%v", clamp(tile.water_variant, 1, MAX_WATER_VARIANTS)) : fmt.tprintf("%v", tile.block_index)
+				label := tile.kind == .water ? fmt.tprintf("w%v%v", clamp(tile.water_variant, 1, MAX_WATER_VARIANTS), tile.water_flip_x ? "a" : "") : fmt.tprintf("%v", tile.block_index)
 				draw_text(tile_center, label, pivot=.center_center, z_layer=.top, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.35)
 			}
 			tx += 1
@@ -2318,6 +2328,24 @@ draw_player_hit_cooldown_bar :: proc() {
 
 	draw_rect(bg, col=Vec4{0.05, 0.05, 0.05, 0.7}, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.top)
 	draw_rect(fill, col=Vec4{1.0, 0.85, 0.2, 0.9}, z_layer=.top)
+}
+
+draw_terrain_water_tile_sprite :: proc(sprite: Sprite_Name, tile_center: Vec2, tile_size: Vec2, flip_x: bool) {
+	if !sprite_is_loaded(sprite) {
+		return
+	}
+	if !flip_x {
+		draw_sprite_in_rect(sprite, tile_center-tile_size*0.5, tile_size, z_layer=.nil, pad_pct=0.0)
+		return
+	}
+
+	src_size := get_sprite_size(sprite)
+	if src_size.x <= 0 || src_size.y <= 0 {
+		return
+	}
+	scale := Vec2{tile_size.x / src_size.x, tile_size.y / src_size.y}
+	xform := utils.xform_scale(Vec2{-scale.x, scale.y})
+	draw_sprite(tile_center, sprite, pivot=.center_center, xform=xform, z_layer=.nil)
 }
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {
