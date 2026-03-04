@@ -1467,7 +1467,7 @@ draw_pause_menu_ui :: proc() {
 		unlock_world_area_with_adjacent(player_area_x, player_area_y)
 	}
 
-	struct_maker_rect := shape.rect_make(debug_start + Vec2{0, -126}, debug_button_size, pivot=.center_center)
+	struct_maker_rect := shape.rect_make(Vec2{f32(GAME_RES_WIDTH) - 8, f32(GAME_RES_HEIGHT) - 8}, debug_button_size, pivot=.top_right)
 	struct_maker_hover, struct_maker_pressed := raw_button(struct_maker_rect)
 	struct_maker_col := Vec4{0.06, 0.08, 0.12, 0.8}
 	if struct_maker_hover {
@@ -1501,7 +1501,7 @@ draw_structure_maker_ui :: proc() {
 	screen_rect := shape.rect_make(Vec2{sx, sy}, Vec2{f32(GAME_RES_WIDTH), f32(GAME_RES_HEIGHT)}, pivot=.center_center)
 	draw_rect(screen_rect, col=Vec4{0.08, 0.08, 0.08, 0.55}, z_layer=.pause_menu)
 
-	panel := shape.rect_make(Vec2{8, f32(GAME_RES_HEIGHT)-8}, Vec2{330, 254}, pivot=.top_left)
+	panel := shape.rect_make(Vec2{8, f32(GAME_RES_HEIGHT)-8}, Vec2{422, 292}, pivot=.top_left)
 	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.92}, outline_col=Vec4{1, 1, 1, 0.28}, z_layer=.pause_menu)
 	draw_text(Vec2{panel.x + 8, panel.w - 8}, "Structure Maker", pivot=.top_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{}, scale=0.6)
 
@@ -1575,7 +1575,7 @@ draw_structure_maker_ui :: proc() {
 	draw_text(Vec2{panel.x + 8, row_y - 11}, status, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
 	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB cycle tile: -3 -> ... -> max block", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
 
-	cell: f32 = 14
+	cell: f32 = 20
 	grid_origin := Vec2{panel.x + 8, panel.w - 50}
 	max_draw_cols := min(cols, int(math.floor((panel.z-panel.x-16)/cell)))
 	max_draw_rows := min(rows, int(math.floor((panel.w-panel.y-58)/cell)))
@@ -1600,7 +1600,6 @@ draw_structure_maker_ui :: proc() {
 				ctx.gs.structure_maker_tiles[r][c] = next
 			}
 
-			draw_text((rect.xy+rect.zw)*0.5, fmt.tprintf("%v", token), pivot=.center_center, z_layer=.pause_menu, col=Vec4{0, 0, 0, 0.75}, drop_shadow_col=Vec4{}, scale=0.28)
 		}
 	}
 }
