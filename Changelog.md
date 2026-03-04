@@ -1,6 +1,10 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Structure Maker water token cycling now includes mirrored `a` variants (`-3a`, `-2a`, `-1a`, `0a`) in both forward and backward cycles, and save/export now writes those suffixed tokens to `terrain_structures.txt`.
+- Added Structure Maker middle-mouse paint tool: middle-click picks the hovered tile token, then holding middle mouse and dragging paints hovered tiles with that same token.
+- Structure Maker grid now supports right-click backward cycling per tile token (`... -> -3 <- max <- ...`), while left-click continues forward cycling.
+- Fixed Structure Maker block preview rendering by drawing tileset block quads on the pause-menu layer (`.pause_menu`) instead of default layer, so block textures are visible in the editor grid.
 - Structure Maker now displays tile textures only (removed numeric token text), increased editor tile size for clearer visual editing, and moved the `Structure Maker` launch button to the top-right of the pause overlay.
 - Structure Maker tile buttons now render edge-to-edge with no 1px spacing, so tile previews are contiguous with no visual margin/padding between cells.
 - Added an in-game `Structure Maker` overlay (from the pause menu) with editable `A x B` dimensions, clickable tile editing that cycles `-3 .. 0 .. TERRAIN_MAX_BLOCK_INDEX`, and one-click save that appends `maker_### = [[...]]` entries to `res/data/terrain_structures.txt` while hot-loading the new structure at runtime.

@@ -62,6 +62,10 @@ Game_State :: struct {
 	structure_maker_cols: int,
 	structure_maker_rows: int,
 	structure_maker_tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]int,
+	structure_maker_tiles_flip_x: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]bool,
+	structure_maker_paint_active: bool,
+	structure_maker_paint_token: int,
+	structure_maker_paint_flip_x: bool,
 	structure_maker_next_id: int,
 	structure_maker_last_saved_id: int,
 	structure_maker_last_save_ok: bool,
@@ -1083,13 +1087,17 @@ reset_structure_maker_tiles :: proc(fill_token := TERRAIN_DEFAULT_BLOCK_INDEX) {
 	for r in 0..<MAX_TERRAIN_STRUCTURE_ROWS {
 		for c in 0..<MAX_TERRAIN_STRUCTURE_COLS {
 			ctx.gs.structure_maker_tiles[r][c] = fill_token
+			ctx.gs.structure_maker_tiles_flip_x[r][c] = false
 		}
 	}
 }
 
-structure_maker_tile_token_to_text :: proc(token: int) -> string {
+structure_maker_tile_token_to_text :: proc(token: int, flip_x: bool) -> string {
 	if token <= 0 {
 		t := clamp(token, -3, 0)
+		if flip_x {
+			return fmt.tprintf("%va", t)
+		}
 		return fmt.tprintf("%v", t)
 	}
 	t := clamp(token, 1, TERRAIN_MAX_BLOCK_INDEX)
@@ -1108,7 +1116,7 @@ build_structure_expr_from_maker :: proc(cols: int, rows: int) -> string {
 			if c > 0 {
 				append(&buf, ",")
 			}
-			tok := structure_maker_tile_token_to_text(ctx.gs.structure_maker_tiles[r][c])
+			tok := structure_maker_tile_token_to_text(ctx.gs.structure_maker_tiles[r][c], ctx.gs.structure_maker_tiles_flip_x[r][c])
 			append(&buf, tok)
 		}
 	}
@@ -1481,15 +1489,29 @@ draw_pause_menu_ui :: proc() {
 	}
 }
 
-draw_structure_maker_tile_preview :: proc(rect: shape.Rect, token: int) {
+draw_structure_maker_tile_preview :: proc(rect: shape.Rect, token: int, flip_x: bool) {
 	if token <= 0 {
 		variant := clamp(1-token, 1, MAX_WATER_VARIANTS)
-		draw_sprite_in_rect(water_sprite_for_variant(variant), rect.xy, shape.rect_size(rect), z_layer=.pause_menu, pad_pct=0.0)
+		water_sprite := water_sprite_for_variant(variant)
+		if !flip_x {
+			draw_sprite_in_rect(water_sprite, rect.xy, shape.rect_size(rect), z_layer=.pause_menu, pad_pct=0.0)
+			return
+		}
+
+		src_size := get_sprite_size(water_sprite)
+		dst_size := shape.rect_size(rect)
+		if src_size.x <= 0 || src_size.y <= 0 || dst_size.x <= 0 || dst_size.y <= 0 {
+			return
+		}
+		scale := Vec2{dst_size.x / src_size.x, dst_size.y / src_size.y}
+		center := (rect.xy + rect.zw) * 0.5
+		xform := utils.xform_scale(Vec2{-scale.x, scale.y})
+		draw_sprite(center, water_sprite, pivot=.center_center, xform=xform, z_layer=.pause_menu)
 		return
 	}
 
 	block := clamp(token, 1, TERRAIN_MAX_BLOCK_INDEX)
-	draw_tileset_block_in_world_rect(.tilemap_color1, block, rect, col=Vec4{1, 1, 1, 1})
+	draw_tileset_block_in_world_rect(.tilemap_color1, block, rect, col=Vec4{1, 1, 1, 1}, z_layer=.pause_menu)
 }
 
 draw_structure_maker_ui :: proc() {
@@ -1573,7 +1595,11 @@ draw_structure_maker_ui :: proc() {
 		}
 	}
 	draw_text(Vec2{panel.x + 8, row_y - 11}, status, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
-	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB cycle tile: -3 -> ... -> max block", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
+	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB fwd, RMB back, MMB drag paint", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
+
+	if !key_down(.MIDDLE_MOUSE) {
+		ctx.gs.structure_maker_paint_active = false
+	}
 
 	cell: f32 = 20
 	grid_origin := Vec2{panel.x + 8, panel.w - 50}
@@ -1585,19 +1611,75 @@ draw_structure_maker_ui :: proc() {
 			cell_pos := grid_origin + Vec2{f32(c) * cell, -f32(r+1) * cell}
 			rect := shape.Rect{cell_pos.x, cell_pos.y, cell_pos.x + cell, cell_pos.y + cell}
 			token := ctx.gs.structure_maker_tiles[r][c]
-			draw_structure_maker_tile_preview(rect, token)
+			flip_x := ctx.gs.structure_maker_tiles_flip_x[r][c]
+			draw_structure_maker_tile_preview(rect, token, flip_x)
 			draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.15}, .pause_menu, 1)
 
 			hover, pressed := raw_button(rect)
+			right_pressed := hover && key_pressed(.RIGHT_MOUSE)
+			if right_pressed {
+				consume_key_pressed(.RIGHT_MOUSE)
+			}
+			middle_pressed := hover && key_pressed(.MIDDLE_MOUSE)
+			if middle_pressed {
+				ctx.gs.structure_maker_paint_active = true
+				ctx.gs.structure_maker_paint_token = token
+				ctx.gs.structure_maker_paint_flip_x = flip_x
+				consume_key_pressed(.MIDDLE_MOUSE)
+			}
 			if hover {
 				draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.45}, .pause_menu, 1)
 			}
+			if hover && key_down(.MIDDLE_MOUSE) && ctx.gs.structure_maker_paint_active {
+				ctx.gs.structure_maker_tiles[r][c] = ctx.gs.structure_maker_paint_token
+				ctx.gs.structure_maker_tiles_flip_x[r][c] = ctx.gs.structure_maker_paint_flip_x
+				continue
+			}
 			if pressed {
-				next := token + 1
-				if next > TERRAIN_MAX_BLOCK_INDEX {
-					next = -3
+				next_token := token
+				next_flip := flip_x
+				if token <= 0 {
+					if !flip_x {
+						next_flip = true
+					} else if token < 0 {
+						next_token = token + 1
+						next_flip = false
+					} else {
+						next_token = 1
+						next_flip = false
+					}
+				} else {
+					next_token = token + 1
+					if next_token > TERRAIN_MAX_BLOCK_INDEX {
+						next_token = -3
+					}
+					next_flip = false
 				}
-				ctx.gs.structure_maker_tiles[r][c] = next
+
+				ctx.gs.structure_maker_tiles[r][c] = next_token
+				ctx.gs.structure_maker_tiles_flip_x[r][c] = next_flip
+			} else if right_pressed {
+				prev_token := token
+				prev_flip := flip_x
+				if token <= 0 {
+					if flip_x {
+						prev_flip = false
+					} else if token > -3 {
+						prev_token = token - 1
+						prev_flip = true
+					} else {
+						prev_token = TERRAIN_MAX_BLOCK_INDEX
+						prev_flip = false
+					}
+				} else if token > 1 {
+					prev_token = token - 1
+					prev_flip = false
+				} else {
+					prev_token = 0
+					prev_flip = true
+				}
+				ctx.gs.structure_maker_tiles[r][c] = prev_token
+				ctx.gs.structure_maker_tiles_flip_x[r][c] = prev_flip
 			}
 
 		}
@@ -2691,7 +2773,7 @@ draw_terrain_block_collision_debug :: proc() {
 	}
 }
 
-draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, world_rect: shape.Rect, col:=color.WHITE) {
+draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, world_rect: shape.Rect, col:=color.WHITE, z_layer: ZLayer = .nil) {
 	size := get_sprite_size(sprite)
 	if size.x <= 0 || size.y <= 0 {
 		return
@@ -2714,7 +2796,7 @@ draw_tileset_block_in_world_rect :: proc(sprite: Sprite_Name, block_index: int, 
 	u1 := base_uv.x + (f32((cell_x+1)*TERRAIN_TILESET_BLOCK_PX)/size.x) * uv_w
 	v1 := base_uv.y + (f32((cell_y+1)*TERRAIN_TILESET_BLOCK_PX)/size.y) * uv_h
 
-	draw_rect(world_rect, sprite=sprite, uv=Vec4{u0, v0, u1, v1}, col=col)
+	draw_rect(world_rect, sprite=sprite, uv=Vec4{u0, v0, u1, v1}, col=col, z_layer=z_layer)
 }
 
 make_chunk_key :: proc(chunk_x: int, chunk_y: int) -> u64 {
