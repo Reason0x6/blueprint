@@ -36,6 +36,7 @@
 - Refined unlocked-world camera behavior so vertical follow now continues until unlocked bounds actually reach the screen edge (no vertical margin clamp).
 - Fixed camera freeze by basing unlocked-world clamp view extents on game resolution (`GAME_RES_WIDTH/HEIGHT`) instead of window-size-derived extents.
 - Fixed world-area indexing to use direct `16x16` tile buckets (no half-tile offset), so adjacent unlocks correctly reveal chunk-inner structure spawns.
+- Added a manual-spawn world offset helper so manual spawn coordinates are bucket-centered: `Vec2{0,0}` now maps to the center of a `16x16` unlock-area bucket for startup entities/items and `spawn_terrain_structure(world_pos)`.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

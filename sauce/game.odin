@@ -1334,6 +1334,7 @@ game_update :: proc() {
 	// setup world for first game tick
 	if ctx.gs.ticks == 0 {
 		player := entity_create(.player)
+		player.pos = manual_spawn_world_pos(Vec2{0, 0})
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.debug_show_grid = false
@@ -1342,18 +1343,18 @@ game_update :: proc() {
 		_ = unlock_world_area_for_world_pos(player.pos)
 
 		oblisk := entity_create(.oblisk_ent)
-		oblisk.pos = Vec2{64, 0}
+		oblisk.pos = manual_spawn_world_pos(Vec2{64, 0})
 		tree := entity_create(.tree_ent)
-		tree.pos = Vec2{26, 0}
+		tree.pos = manual_spawn_world_pos(Vec2{26, 0})
 		sapling := entity_create(.sapling_ent)
-		sapling.pos =Vec2{-40, 0}
+		sapling.pos = manual_spawn_world_pos(Vec2{-40, 0})
 		sprout := entity_create(.sprout_ent)
-		sprout.pos = Vec2{-80, 0}
+		sprout.pos = manual_spawn_world_pos(Vec2{-80, 0})
 
-		spawn_item_pickup(.wood, 4, Vec2{-68, 8})
-		spawn_item_pickup(.stone, 3, Vec2{-86, 8})
-		spawn_item_pickup(.fiber, 4, Vec2{-104, 8})
-		spawn_item_pickup(.stone_multitool, 1, Vec2{-55, 6})
+		spawn_item_pickup(.wood, 4, manual_spawn_world_pos(Vec2{-68, 8}))
+		spawn_item_pickup(.stone, 3, manual_spawn_world_pos(Vec2{-86, 8}))
+		spawn_item_pickup(.fiber, 4, manual_spawn_world_pos(Vec2{-104, 8}))
+		spawn_item_pickup(.stone_multitool, 1, manual_spawn_world_pos(Vec2{-55, 6}))
 		
 	}
 	spawn_vegetation_near_player_chunks()
@@ -1692,6 +1693,16 @@ is_rect_touching_locked_world_area :: proc(rect: shape.Rect) -> bool {
 	return false
 }
 
+manual_spawn_origin_offset :: proc() -> Vec2 {
+	half_tiles := f32(WORLD_UNLOCK_AREA_SIZE_TILES) * 0.5
+	off := half_tiles * ENTITY_GRID_SIZE
+	return Vec2{off, off}
+}
+
+manual_spawn_world_pos :: proc(pos: Vec2) -> Vec2 {
+	return pos + manual_spawn_origin_offset()
+}
+
 is_chunk_in_unlocked_world :: proc(chunk_x: int, chunk_y: int) -> bool {
 	min_tile_x := chunk_x * BIOME_CHUNK_SIZE_TILES
 	max_tile_x := min_tile_x + BIOME_CHUNK_SIZE_TILES - 1
@@ -1892,8 +1903,9 @@ spawn_terrain_structure_at_tile :: proc(name: string, origin_tile_x: int, origin
 }
 
 spawn_terrain_structure :: proc(name: string, world_pos: Vec2) -> bool {
-	origin_tile_x := int(math.floor(world_pos.x / ENTITY_GRID_SIZE))
-	origin_tile_y := int(math.floor(world_pos.y / ENTITY_GRID_SIZE))
+	spawn_pos := manual_spawn_world_pos(world_pos)
+	origin_tile_x := int(math.floor(spawn_pos.x / ENTITY_GRID_SIZE))
+	origin_tile_y := int(math.floor(spawn_pos.y / ENTITY_GRID_SIZE))
 	return spawn_terrain_structure_at_tile(name, origin_tile_x, origin_tile_y)
 }
 
