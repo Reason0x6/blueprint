@@ -1665,6 +1665,17 @@ draw_structure_maker_tile_preview :: proc(rect: shape.Rect, token: int, flip_x: 
 	draw_tileset_block_in_world_rect(.tilemap_color1, block, rect, col=Vec4{1, 1, 1, 1}, z_layer=.pause_menu)
 }
 
+draw_structure_maker_button :: proc(rect: shape.Rect, label: string) -> bool {
+	hover, pressed := raw_button(rect)
+	col := Vec4{0.08, 0.08, 0.08, 0.8}
+	if hover {
+		col = Vec4{0.16, 0.16, 0.16, 0.9}
+	}
+	draw_rect(rect, col=col, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
+	draw_text((rect.xy+rect.zw)*0.5, label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
+	return pressed
+}
+
 draw_structure_maker_ui :: proc() {
 	if !is_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER) {
 		return
@@ -1716,51 +1727,40 @@ draw_structure_maker_ui :: proc() {
 	load_struct_rect := shape.rect_make(Vec2{panel.x + 54, row_y - 34}, Vec2{38, 12}, pivot=.top_left)
 	overwrite_struct_rect := shape.rect_make(Vec2{panel.x + 96, row_y - 34}, Vec2{58, 12}, pivot=.top_left)
 
-	draw_debug_ui_button :: proc(rect: shape.Rect, label: string) -> bool {
-		hover, pressed := raw_button(rect)
-		col := Vec4{0.08, 0.08, 0.08, 0.8}
-		if hover {
-			col = Vec4{0.16, 0.16, 0.16, 0.9}
-		}
-		draw_rect(rect, col=col, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
-		draw_text((rect.xy+rect.zw)*0.5, label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
-		return pressed
-	}
-
-	if draw_debug_ui_button(col_minus, "-A") {
+	if draw_structure_maker_button(col_minus, "-A") {
 		ctx.gs.structure_maker_cols = max(1, cols-1)
 	}
-	if draw_debug_ui_button(col_plus, "+A") {
+	if draw_structure_maker_button(col_plus, "+A") {
 		ctx.gs.structure_maker_cols = min(MAX_TERRAIN_STRUCTURE_COLS, cols+1)
 	}
-	if draw_debug_ui_button(row_minus, "-B") {
+	if draw_structure_maker_button(row_minus, "-B") {
 		ctx.gs.structure_maker_rows = max(1, rows-1)
 	}
-	if draw_debug_ui_button(row_plus, "+B") {
+	if draw_structure_maker_button(row_plus, "+B") {
 		ctx.gs.structure_maker_rows = min(MAX_TERRAIN_STRUCTURE_ROWS, rows+1)
 	}
-	if draw_debug_ui_button(clear_rect, "Clear") {
+	if draw_structure_maker_button(clear_rect, "Clear") {
 		reset_structure_maker_tiles()
 	}
-	if draw_debug_ui_button(save_rect, "Save") {
+	if draw_structure_maker_button(save_rect, "Save") {
 		_ = save_structure_from_maker()
 	}
-	if draw_debug_ui_button(prev_struct_rect, "<") && len(terrain_structures) > 0 {
+	if draw_structure_maker_button(prev_struct_rect, "<") && len(terrain_structures) > 0 {
 		ctx.gs.structure_maker_selected_index -= 1
 		if ctx.gs.structure_maker_selected_index < 0 {
 			ctx.gs.structure_maker_selected_index = len(terrain_structures) - 1
 		}
 	}
-	if draw_debug_ui_button(next_struct_rect, ">") && len(terrain_structures) > 0 {
+	if draw_structure_maker_button(next_struct_rect, ">") && len(terrain_structures) > 0 {
 		ctx.gs.structure_maker_selected_index += 1
 		if ctx.gs.structure_maker_selected_index >= len(terrain_structures) {
 			ctx.gs.structure_maker_selected_index = 0
 		}
 	}
-	if draw_debug_ui_button(load_struct_rect, "Load") && len(terrain_structures) > 0 {
+	if draw_structure_maker_button(load_struct_rect, "Load") && len(terrain_structures) > 0 {
 		_ = load_structure_into_maker(ctx.gs.structure_maker_selected_index)
 	}
-	if draw_debug_ui_button(overwrite_struct_rect, "Overwrite") && len(terrain_structures) > 0 {
+	if draw_structure_maker_button(overwrite_struct_rect, "Overwrite") && len(terrain_structures) > 0 {
 		_ = overwrite_structure_from_maker(ctx.gs.structure_maker_selected_index)
 	}
 
