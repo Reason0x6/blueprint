@@ -2,3 +2,6 @@ frame_count=1
 frame_widths=128
 frame_sizes=128x128
 frame_center_offsets=0.000:0.000
+opaque_bounds=0:0:127:127
+sort_foot_x=63.5
+sort_foot_y=127

@@ -2,3 +2,6 @@ frame_count=3
 frame_widths=32,32,32
 frame_sizes=32x28,32x28,32x28
 frame_center_offsets=0.000:0.000,0.000:0.000,0.000:0.000
+opaque_bounds=2:0:89:27
+sort_foot_x=45.5
+sort_foot_y=27

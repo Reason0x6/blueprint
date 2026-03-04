@@ -2,3 +2,6 @@ frame_count=6
 frame_widths=2,7,12,16,27,29
 frame_sizes=2x2,7x6,12x10,16x13,27x25,29x26
 frame_center_offsets=0.000:12.000,0.000:10.000,0.000:8.000,0.000:6.500,0.000:0.500,0.000:0.000
+opaque_bounds=0:0:92:25
+sort_foot_x=46
+sort_foot_y=25

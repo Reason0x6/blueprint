@@ -2,3 +2,6 @@ frame_count=4
 frame_widths=12,12,12,12
 frame_sizes=12x10,12x11,12x11,12x11
 frame_center_offsets=0.000:0.500,0.000:0.000,0.000:0.000,0.000:0.000
+opaque_bounds=0:0:47:10
+sort_foot_x=23.5
+sort_foot_y=10

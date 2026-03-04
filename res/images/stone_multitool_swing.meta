@@ -2,3 +2,6 @@ frame_count=5
 frame_widths=16,23,22,36,30
 frame_sizes=16x17,23x15,22x33,36x65,30x22
 frame_center_offsets=10.000:24.000,6.500:25.000,7.000:16.000,0.000:0.000,3.000:21.500
+opaque_bounds=0:0:126:64
+sort_foot_x=63
+sort_foot_y=64
