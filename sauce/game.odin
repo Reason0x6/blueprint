@@ -2486,6 +2486,53 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	}
 }
 
+structure_overlaps_player_hitbox :: proc(st: Terrain_Structure, origin_tile_x: int, origin_tile_y: int, player_hitbox: shape.Rect) -> bool {
+	for r in 0..<st.rows {
+		for c in 0..<st.cols {
+			tile := st.tiles[r][c]
+			if tile.kind == .empty {
+				continue
+			}
+
+			tile_x := origin_tile_x + c
+			tile_y := origin_tile_y - r
+
+			if tile.kind == .water {
+				// Conservative trap-prevention: treat water structure tiles as blocking area for spawn overlap checks.
+				tile_center := Vec2{(f32(tile_x) + 0.5) * ENTITY_GRID_SIZE, (f32(tile_y) + 0.5) * ENTITY_GRID_SIZE}
+				tile_rect := shape.rect_make(tile_center, Vec2{ENTITY_GRID_SIZE, ENTITY_GRID_SIZE}, pivot=.center_center)
+				hit, _ := rounded_hitbox_collide_rect(player_hitbox, tile_rect, HITBOX_CORNER_CUT)
+				if hit {
+					return true
+				}
+				continue
+			}
+
+			if tile.kind == .block && tile.block_index > 0 && tile.block_index <= TERRAIN_MAX_BLOCK_INDEX {
+				set := terrain_block_hitboxes[tile.block_index]
+				for i in 0..<set.count {
+					cfg := set.boxes[i]
+					if cfg.size.x <= 0 || cfg.size.y <= 0 {
+						continue
+					}
+					tile_min := Vec2{f32(tile_x) * ENTITY_GRID_SIZE, f32(tile_y) * ENTITY_GRID_SIZE}
+					block_rect := shape.Rect{
+						tile_min.x + cfg.offset.x,
+						tile_min.y + cfg.offset.y,
+						tile_min.x + cfg.offset.x + cfg.size.x,
+						tile_min.y + cfg.offset.y + cfg.size.y,
+					}
+					hit, _ := rounded_hitbox_collide_rect(player_hitbox, block_rect, HITBOX_CORNER_CUT)
+					if hit {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
 	if len(terrain_structures) <= 0 {
 		return
@@ -2547,61 +2594,77 @@ spawn_random_structure_for_chunk :: proc(chunk_x: int, chunk_y: int) {
 		return
 	}
 
+	player := get_player()
+	player_hitbox: shape.Rect
+	player_hitbox_ok := false
+	if is_valid(player^) {
+		player_hitbox, player_hitbox_ok = get_entity_hitbox_rect(player^)
+	}
+
 	base_seed := u64(i64(chunk_x)*104729 + i64(chunk_y)*130363)
-	zone_f := random01_from_seed(base_seed ~ 0x243F6A8885A308D3)
-	zone_i := clamp(int(math.floor(zone_f * f32(len(zones)))), 0, len(zones)-1)
-	zone := zones[zone_i]
+	for attempt := 0; attempt < 16; attempt += 1 {
+		attempt_seed := base_seed + u64(attempt)*0x9E3779B97F4A7C15
 
-	zone_w := zone.max_x - zone.min_x + 1
-	zone_h := zone.max_y - zone.min_y + 1
-	inner_off_x_choices := zone_w - inner + 1
-	inner_off_y_choices := zone_h - inner + 1
-	inner_off_x := 0
-	inner_off_y := 0
-	if inner_off_x_choices > 1 {
-		fx := random01_from_seed(base_seed ~ 0x13198A2E03707344)
-		inner_off_x = clamp(int(math.floor(fx * f32(inner_off_x_choices))), 0, inner_off_x_choices-1)
-	}
-	if inner_off_y_choices > 1 {
-		fy := random01_from_seed(base_seed ~ 0xA4093822299F31D0)
-		inner_off_y = clamp(int(math.floor(fy * f32(inner_off_y_choices))), 0, inner_off_y_choices-1)
-	}
+		zone_f := random01_from_seed(attempt_seed ~ 0x243F6A8885A308D3)
+		zone_i := clamp(int(math.floor(zone_f * f32(len(zones)))), 0, len(zones)-1)
+		zone := zones[zone_i]
 
-	inner_min_x := zone.min_x + inner_off_x
-	inner_min_y := zone.min_y + inner_off_y
-	inner_max_x := inner_min_x + inner - 1
-	inner_max_y := inner_min_y + inner - 1
+		zone_w := zone.max_x - zone.min_x + 1
+		zone_h := zone.max_y - zone.min_y + 1
+		inner_off_x_choices := zone_w - inner + 1
+		inner_off_y_choices := zone_h - inner + 1
+		inner_off_x := 0
+		inner_off_y := 0
+		if inner_off_x_choices > 1 {
+			fx := random01_from_seed(attempt_seed ~ 0x13198A2E03707344)
+			inner_off_x = clamp(int(math.floor(fx * f32(inner_off_x_choices))), 0, inner_off_x_choices-1)
+		}
+		if inner_off_y_choices > 1 {
+			fy := random01_from_seed(attempt_seed ~ 0xA4093822299F31D0)
+			inner_off_y = clamp(int(math.floor(fy * f32(inner_off_y_choices))), 0, inner_off_y_choices-1)
+		}
 
-	pick_f := random01_from_seed(base_seed ~ 0x9E3779B97F4A7C15)
-	st_pick_i := clamp(int(math.floor(pick_f * f32(len(candidates)))), 0, len(candidates)-1)
-	st_i := candidates[st_pick_i]
-	st := terrain_structures[st_i]
+		inner_min_x := zone.min_x + inner_off_x
+		inner_min_y := zone.min_y + inner_off_y
+		inner_max_x := inner_min_x + inner - 1
+		inner_max_y := inner_min_y + inner - 1
 
-	max_origin_x := inner_max_x - (st.cols - 1)
-	min_origin_y := inner_min_y + (st.rows - 1)
-	if max_origin_x < inner_min_x || min_origin_y > inner_max_y {
+		pick_f := random01_from_seed(attempt_seed ~ 0x9E3779B97F4A7C15)
+		st_pick_i := clamp(int(math.floor(pick_f * f32(len(candidates)))), 0, len(candidates)-1)
+		st_i := candidates[st_pick_i]
+		st := terrain_structures[st_i]
+
+		max_origin_x := inner_max_x - (st.cols - 1)
+		min_origin_y := inner_min_y + (st.rows - 1)
+		if max_origin_x < inner_min_x || min_origin_y > inner_max_y {
+			continue
+		}
+
+		x_choices := max_origin_x - inner_min_x + 1
+		y_choices := inner_max_y - min_origin_y + 1
+		if x_choices <= 0 || y_choices <= 0 {
+			continue
+		}
+
+		rx := random01_from_seed(attempt_seed ~ 0xD1B54A32D192ED03)
+		ry := random01_from_seed(attempt_seed ~ 0x94D049BB133111EB)
+		off_x := clamp(int(math.floor(rx * f32(x_choices))), 0, x_choices-1)
+		off_y := clamp(int(math.floor(ry * f32(y_choices))), 0, y_choices-1)
+
+		origin_tile_x := inner_min_x + off_x
+		origin_tile_y := min_origin_y + off_y
+
+		if player_hitbox_ok && structure_overlaps_player_hitbox(st, origin_tile_x, origin_tile_y, player_hitbox) {
+			continue
+		}
+
+		append(&ctx.gs.terrain_structure_instances, Terrain_Structure_Instance{
+			structure_index = st_i,
+			origin_tile_x = origin_tile_x,
+			origin_tile_y = origin_tile_y,
+		})
 		return
 	}
-
-	x_choices := max_origin_x - inner_min_x + 1
-	y_choices := inner_max_y - min_origin_y + 1
-	if x_choices <= 0 || y_choices <= 0 {
-		return
-	}
-
-	rx := random01_from_seed(base_seed ~ 0xD1B54A32D192ED03)
-	ry := random01_from_seed(base_seed ~ 0x94D049BB133111EB)
-	off_x := clamp(int(math.floor(rx * f32(x_choices))), 0, x_choices-1)
-	off_y := clamp(int(math.floor(ry * f32(y_choices))), 0, y_choices-1)
-
-	origin_tile_x := inner_min_x + off_x
-	origin_tile_y := min_origin_y + off_y
-
-	append(&ctx.gs.terrain_structure_instances, Terrain_Structure_Instance{
-		structure_index = st_i,
-		origin_tile_x = origin_tile_x,
-		origin_tile_y = origin_tile_y,
-	})
 }
 
 spawn_vegetation_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
