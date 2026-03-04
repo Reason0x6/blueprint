@@ -59,6 +59,12 @@ Game_State :: struct {
 	debug_show_durability: bool,
 	debug_show_growth: bool,
 	debug_show_grid: bool,
+	structure_maker_cols: int,
+	structure_maker_rows: int,
+	structure_maker_tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]int,
+	structure_maker_next_id: int,
+	structure_maker_last_saved_id: int,
+	structure_maker_last_save_ok: bool,
 	hold_hit_target: Entity_Handle,
 	has_hold_hit_target: bool,
 	hit_cooldown_end_time: f64,
@@ -118,6 +124,7 @@ VEG_MIN_DIST_TREE: f32 : 22
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
+UI_OVERLAY_STRUCTURE_MAKER : u32 : 1 << 2
 
 Item_Kind :: enum u8 {
 	nil,
@@ -1063,6 +1070,101 @@ load_terrain_structures :: proc() {
 	}
 }
 
+terrain_structure_name_exists :: proc(name: string) -> bool {
+	for i in 0..<len(terrain_structures) {
+		if terrain_structures[i].name == name {
+			return true
+		}
+	}
+	return false
+}
+
+reset_structure_maker_tiles :: proc(fill_token := TERRAIN_DEFAULT_BLOCK_INDEX) {
+	for r in 0..<MAX_TERRAIN_STRUCTURE_ROWS {
+		for c in 0..<MAX_TERRAIN_STRUCTURE_COLS {
+			ctx.gs.structure_maker_tiles[r][c] = fill_token
+		}
+	}
+}
+
+structure_maker_tile_token_to_text :: proc(token: int) -> string {
+	if token <= 0 {
+		t := clamp(token, -3, 0)
+		return fmt.tprintf("%v", t)
+	}
+	t := clamp(token, 1, TERRAIN_MAX_BLOCK_INDEX)
+	return fmt.tprintf("%v", t)
+}
+
+build_structure_expr_from_maker :: proc(cols: int, rows: int) -> string {
+	buf := make([dynamic]u8, 0, max(128, cols*rows*4), allocator=context.temp_allocator)
+	append(&buf, "[[")
+
+	for r in 0..<rows {
+		if r > 0 {
+			append(&buf, "],[")
+		}
+		for c in 0..<cols {
+			if c > 0 {
+				append(&buf, ",")
+			}
+			tok := structure_maker_tile_token_to_text(ctx.gs.structure_maker_tiles[r][c])
+			append(&buf, tok)
+		}
+	}
+
+	append(&buf, "]]")
+	return string(buf[:])
+}
+
+save_structure_from_maker :: proc() -> bool {
+	cols := clamp(ctx.gs.structure_maker_cols, 1, MAX_TERRAIN_STRUCTURE_COLS)
+	rows := clamp(ctx.gs.structure_maker_rows, 1, MAX_TERRAIN_STRUCTURE_ROWS)
+	expr := build_structure_expr_from_maker(cols, rows)
+
+	save_id := max(1, ctx.gs.structure_maker_next_id)
+	name := fmt.tprintf("maker_%03d", save_id)
+	for terrain_structure_name_exists(name) {
+		save_id += 1
+		name = fmt.tprintf("maker_%03d", save_id)
+	}
+	ctx.gs.structure_maker_next_id = save_id + 1
+
+	line := fmt.tprintf("%v = %v\n", name, expr)
+	path := "res/data/terrain_structures.txt"
+	existing, read_err := os.read_entire_file_from_path(path, context.temp_allocator)
+
+	full_text := line
+	if read_err == nil && len(existing) > 0 {
+		prefix := string(existing)
+		if prefix[len(prefix)-1] != '\n' {
+			full_text = fmt.tprintf("%v\n%v", prefix, line)
+		} else {
+			full_text = fmt.tprintf("%v%v", prefix, line)
+		}
+	}
+
+	f, open_err := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC)
+	if open_err != nil {
+		log.warnf("structure maker failed to open %q for write: %v", path, open_err)
+		ctx.gs.structure_maker_last_save_ok = false
+		return false
+	}
+	defer os.close(f)
+
+	_ = fmt.fprint(f, full_text)
+
+	// Keep runtime list in sync immediately without requiring restart.
+	if !parse_terrain_structure_expr(name, expr) {
+		ctx.gs.structure_maker_last_save_ok = false
+		return false
+	}
+
+	ctx.gs.structure_maker_last_saved_id = save_id
+	ctx.gs.structure_maker_last_save_ok = true
+	return true
+}
+
 water_sprite_for_variant :: proc(variant: int) -> Sprite_Name {
 	switch variant {
 	case 2: return .water_2
@@ -1217,6 +1319,7 @@ app_frame :: proc() {
 
 		draw_inventory_ui()
 		draw_pause_menu_ui()
+		draw_structure_maker_ui()
 	}
 
 	sound_play_continuously("event:/ambiance", "")
@@ -1363,6 +1466,143 @@ draw_pause_menu_ui :: proc() {
 	if unlock_adj_pressed && player_valid {
 		unlock_world_area_with_adjacent(player_area_x, player_area_y)
 	}
+
+	struct_maker_rect := shape.rect_make(debug_start + Vec2{0, -126}, debug_button_size, pivot=.center_center)
+	struct_maker_hover, struct_maker_pressed := raw_button(struct_maker_rect)
+	struct_maker_col := Vec4{0.06, 0.08, 0.12, 0.8}
+	if struct_maker_hover {
+		struct_maker_col = Vec4{0.14, 0.18, 0.28, 0.88}
+	}
+	draw_rect(struct_maker_rect, col=struct_maker_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	draw_text((struct_maker_rect.xy+struct_maker_rect.zw)*0.5, "Structure Maker", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.46)
+	if struct_maker_pressed {
+		set_ui_overlay_open(UI_OVERLAY_PAUSE, false)
+		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, true)
+	}
+}
+
+draw_structure_maker_tile_preview :: proc(rect: shape.Rect, token: int) {
+	if token <= 0 {
+		variant := clamp(1-token, 1, MAX_WATER_VARIANTS)
+		draw_sprite_in_rect(water_sprite_for_variant(variant), rect.xy, shape.rect_size(rect), z_layer=.pause_menu, pad_pct=0.0)
+		return
+	}
+
+	block := clamp(token, 1, TERRAIN_MAX_BLOCK_INDEX)
+	draw_tileset_block_in_world_rect(.tilemap_color1, block, rect, col=Vec4{1, 1, 1, 1})
+}
+
+draw_structure_maker_ui :: proc() {
+	if !is_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER) {
+		return
+	}
+
+	sx, sy := screen_pivot(.center_center)
+	screen_rect := shape.rect_make(Vec2{sx, sy}, Vec2{f32(GAME_RES_WIDTH), f32(GAME_RES_HEIGHT)}, pivot=.center_center)
+	draw_rect(screen_rect, col=Vec4{0.08, 0.08, 0.08, 0.55}, z_layer=.pause_menu)
+
+	panel := shape.rect_make(Vec2{8, f32(GAME_RES_HEIGHT)-8}, Vec2{330, 254}, pivot=.top_left)
+	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.92}, outline_col=Vec4{1, 1, 1, 0.28}, z_layer=.pause_menu)
+	draw_text(Vec2{panel.x + 8, panel.w - 8}, "Structure Maker", pivot=.top_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{}, scale=0.6)
+
+	close_rect := shape.rect_make(Vec2{panel.z - 18, panel.w - 10}, Vec2{22, 12}, pivot=.top_left)
+	close_hover, close_pressed := raw_button(close_rect)
+	close_col := Vec4{0.18, 0.08, 0.08, 0.85}
+	if close_hover {
+		close_col = Vec4{0.25, 0.11, 0.11, 0.95}
+	}
+	draw_rect(close_rect, col=close_col, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
+	draw_text((close_rect.xy+close_rect.zw)*0.5, "Close", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
+	if close_pressed {
+		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, false)
+		return
+	}
+
+	cols := clamp(ctx.gs.structure_maker_cols, 1, MAX_TERRAIN_STRUCTURE_COLS)
+	rows := clamp(ctx.gs.structure_maker_rows, 1, MAX_TERRAIN_STRUCTURE_ROWS)
+	ctx.gs.structure_maker_cols = cols
+	ctx.gs.structure_maker_rows = rows
+
+	btn_size := Vec2{18, 12}
+	row_y := panel.w - 24
+	draw_text(Vec2{panel.x + 8, row_y + 2}, fmt.tprintf("A x B: %v x %v", cols, rows), pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
+
+	col_minus := shape.rect_make(Vec2{panel.x + 112, row_y}, btn_size, pivot=.top_left)
+	col_plus := shape.rect_make(Vec2{panel.x + 134, row_y}, btn_size, pivot=.top_left)
+	row_minus := shape.rect_make(Vec2{panel.x + 164, row_y}, btn_size, pivot=.top_left)
+	row_plus := shape.rect_make(Vec2{panel.x + 186, row_y}, btn_size, pivot=.top_left)
+	save_rect := shape.rect_make(Vec2{panel.x + 214, row_y}, Vec2{46, 12}, pivot=.top_left)
+	clear_rect := shape.rect_make(Vec2{panel.x + 264, row_y}, Vec2{46, 12}, pivot=.top_left)
+
+	draw_debug_ui_button :: proc(rect: shape.Rect, label: string) -> bool {
+		hover, pressed := raw_button(rect)
+		col := Vec4{0.08, 0.08, 0.08, 0.8}
+		if hover {
+			col = Vec4{0.16, 0.16, 0.16, 0.9}
+		}
+		draw_rect(rect, col=col, outline_col=Vec4{1, 1, 1, 0.3}, z_layer=.pause_menu)
+		draw_text((rect.xy+rect.zw)*0.5, label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
+		return pressed
+	}
+
+	if draw_debug_ui_button(col_minus, "-A") {
+		ctx.gs.structure_maker_cols = max(1, cols-1)
+	}
+	if draw_debug_ui_button(col_plus, "+A") {
+		ctx.gs.structure_maker_cols = min(MAX_TERRAIN_STRUCTURE_COLS, cols+1)
+	}
+	if draw_debug_ui_button(row_minus, "-B") {
+		ctx.gs.structure_maker_rows = max(1, rows-1)
+	}
+	if draw_debug_ui_button(row_plus, "+B") {
+		ctx.gs.structure_maker_rows = min(MAX_TERRAIN_STRUCTURE_ROWS, rows+1)
+	}
+	if draw_debug_ui_button(clear_rect, "Clear") {
+		reset_structure_maker_tiles()
+	}
+	if draw_debug_ui_button(save_rect, "Save") {
+		_ = save_structure_from_maker()
+	}
+
+	status := "Last save: none"
+	if ctx.gs.structure_maker_last_saved_id > 0 {
+		if ctx.gs.structure_maker_last_save_ok {
+			status = fmt.tprintf("Saved: maker_%03d", ctx.gs.structure_maker_last_saved_id)
+		} else {
+			status = "Save failed"
+		}
+	}
+	draw_text(Vec2{panel.x + 8, row_y - 11}, status, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
+	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB cycle tile: -3 -> ... -> max block", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
+
+	cell: f32 = 14
+	grid_origin := Vec2{panel.x + 8, panel.w - 50}
+	max_draw_cols := min(cols, int(math.floor((panel.z-panel.x-16)/cell)))
+	max_draw_rows := min(rows, int(math.floor((panel.w-panel.y-58)/cell)))
+
+	for r in 0..<max_draw_rows {
+		for c in 0..<max_draw_cols {
+			cell_pos := grid_origin + Vec2{f32(c) * cell, -f32(r+1) * cell}
+			rect := shape.Rect{cell_pos.x, cell_pos.y, cell_pos.x + cell - 1, cell_pos.y + cell - 1}
+			token := ctx.gs.structure_maker_tiles[r][c]
+			draw_structure_maker_tile_preview(rect, token)
+			draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.15}, .pause_menu, 1)
+
+			hover, pressed := raw_button(rect)
+			if hover {
+				draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.45}, .pause_menu, 1)
+			}
+			if pressed {
+				next := token + 1
+				if next > TERRAIN_MAX_BLOCK_INDEX {
+					next = -3
+				}
+				ctx.gs.structure_maker_tiles[r][c] = next
+			}
+
+			draw_text((rect.xy+rect.zw)*0.5, fmt.tprintf("%v", token), pivot=.center_center, z_layer=.pause_menu, col=Vec4{0, 0, 0, 0.75}, drop_shadow_col=Vec4{}, scale=0.28)
+		}
+	}
 }
 
 app_shutdown :: proc() {
@@ -1397,6 +1637,10 @@ game_update :: proc() {
 		ctx.gs.debug_show_grid = false
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
 		ctx.gs.unlocked_world_areas = make([dynamic]u64, 0, 64, allocator=context.allocator)
+		ctx.gs.structure_maker_cols = 10
+		ctx.gs.structure_maker_rows = 6
+		ctx.gs.structure_maker_next_id = len(terrain_structures) + 1
+		reset_structure_maker_tiles()
 		player.pos = manual_spawn_world_pos_for_hitbox(Vec2{0, 0}, Vec2{8, 8}, .bottom_center)
 		_ = unlock_world_area_for_world_pos(player.pos)
 
