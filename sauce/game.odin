@@ -2887,6 +2887,7 @@ set_ui_overlay_open :: proc(mask: u32, open: bool) {
 }
 
 close_all_ui_overlays :: proc() {
+	return_inventory_overlay_items_to_inventory(&ctx.gs.inventory)
 	ctx.gs.ui_overlay_mask = 0
 	ctx.gs.inventory.open = false
 }
@@ -2983,25 +2984,61 @@ try_consume_crafting_ingredients_for_output :: proc(inv: ^Inventory_State, outpu
 	return consume_recipe_pattern_slots(inv, r.pattern)
 }
 
+return_slot_to_inventory_or_drop :: proc(inv: ^Inventory_State, slot: ^Inventory_Slot) {
+	if slot.item == .nil || slot.count <= 0 {
+		slot^ = {}
+		return
+	}
+
+	remaining := slot.count
+	added := inventory_add_item(inv, slot.item, remaining)
+	remaining -= added
+	item := slot.item
+	slot^ = {}
+
+	if remaining <= 0 {
+		return
+	}
+
+	drop_pos := Vec2{}
+	player := get_player()
+	if is_valid(player^) {
+		drop_pos = get_inventory_drop_world_pos(player.pos + Vec2{1, 0})
+	} else {
+		drop_pos = {}
+	}
+	spawn_item_pickup(item, remaining, drop_pos)
+}
+
+return_inventory_overlay_items_to_inventory :: proc(inv: ^Inventory_State) {
+	if inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
+		return_slot_to_inventory_or_drop(inv, &inv.drag_slot)
+		clear_inventory_drag(inv)
+	}
+
+	for i in 0..<CRAFT_INPUT_SLOT_COUNT {
+		return_slot_to_inventory_or_drop(inv, &inv.crafting_slots[i])
+	}
+
+	inv.crafting_recipe_index = -1
+	crafting_set_output(inv, .nil, 0)
+}
+
 inventory_update :: proc() {
 	inv := &ctx.gs.inventory
 
 	if key_pressed(.TAB) {
 		consume_key_pressed(.TAB)
 		next_open := !is_ui_overlay_open(UI_OVERLAY_INVENTORY)
-		if !next_open && inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
-			drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
-			spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
-			clear_inventory_drag(inv)
+		if !next_open && inv.open {
+			return_inventory_overlay_items_to_inventory(inv)
 		}
 		inv.open = next_open
 		set_ui_overlay_open(UI_OVERLAY_INVENTORY, next_open)
 	}
 
 	if !inv.open && inv.dragging && inv.drag_slot.item != .nil && inv.drag_slot.count > 0 {
-		drop_pos := get_inventory_drop_world_pos(mouse_pos_in_world_space())
-		spawn_item_pickup(inv.drag_slot.item, inv.drag_slot.count, drop_pos)
-		clear_inventory_drag(inv)
+		return_inventory_overlay_items_to_inventory(inv)
 	}
 
 	update_crafting_output(inv)
@@ -3334,11 +3371,13 @@ draw_inventory_ui :: proc() {
 			slot_index, slot_ok := find_inventory_slot_at_mouse(inv, mouse_pos)
 			if slot_ok {
 				inv.equipped_slot = slot_index
-				slot := &inv.slots[slot_index]
-				if inv.dragging {
-					_ = place_held_stack_swap(inv, slot)
-				} else {
-					_ = pick_up_slot_into_hand(inv, slot, .inventory, slot_index)
+				if inv.open {
+					slot := &inv.slots[slot_index]
+					if inv.dragging {
+						_ = place_held_stack_swap(inv, slot)
+					} else {
+						_ = pick_up_slot_into_hand(inv, slot, .inventory, slot_index)
+					}
 				}
 				consumed_click = true
 			}
