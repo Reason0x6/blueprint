@@ -2907,6 +2907,28 @@ draw_world_grid :: proc() {
 	}
 }
 
+draw_rect_outline_only :: proc(rect: shape.Rect, col: Vec4, z_layer: ZLayer, thickness: f32 = 1) {
+	if thickness <= 0 {
+		return
+	}
+
+	r := shape.rect_correct(rect)
+	if r.z <= r.x || r.w <= r.y {
+		return
+	}
+
+	t := min(thickness, min(r.z-r.x, r.w-r.y))
+	left := shape.Rect{r.x, r.y, r.x + t, r.w}
+	right := shape.Rect{r.z - t, r.y, r.z, r.w}
+	bottom := shape.Rect{r.x, r.y, r.z, r.y + t}
+	top := shape.Rect{r.x, r.w - t, r.z, r.w}
+
+	draw_rect(left, col=col, z_layer=z_layer)
+	draw_rect(right, col=col, z_layer=z_layer)
+	draw_rect(bottom, col=col, z_layer=z_layer)
+	draw_rect(top, col=col, z_layer=z_layer)
+}
+
 draw_entity_hitbox_debug :: proc(e: Entity) {
 	hitbox, ok := get_entity_hitbox_rect(e)
 	if !ok {
@@ -2917,7 +2939,7 @@ draw_entity_hitbox_debug :: proc(e: Entity) {
 	if is_game_paused() {
 		layer = .pause_menu
 	}
-	draw_rect(hitbox, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{1, 0.2, 0.2, 0.95}, z_layer=layer)
+	draw_rect_outline_only(hitbox, Vec4{1, 0.2, 0.2, 0.95}, layer, 1)
 }
 
 draw_entity_overlap_debug :: proc(e: Entity) {

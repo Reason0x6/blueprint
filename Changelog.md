@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Entity hitbox debug visuals (red) now use strict edge-line rendering (4 border quads) instead of `draw_rect` outline mode, ensuring they are always outline-only with no interior fill.
 - Water collision debug overlays now render as outline-only boxes (no fill), matching the hitbox/overlap outline style.
 - Reverted the temporary bush sort-foot switch to hitbox-bottom and restored bush depth/debug feet to the visual-base offset path (`e.pos + Vec2{0, 32}`).
 - When `Hitboxes` debug is enabled, the game now also draws a small white dot per entity at its computed depth-sort feet position (`get_entity_sort_feet_pos`) so sprite-foot ordering can be visually verified in-world.
