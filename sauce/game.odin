@@ -1334,12 +1334,12 @@ game_update :: proc() {
 	// setup world for first game tick
 	if ctx.gs.ticks == 0 {
 		player := entity_create(.player)
-		player.pos = find_player_spawn_pos_near_middle(player, manual_spawn_world_pos(Vec2{0, 0}))
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.debug_show_grid = false
 		ctx.gs.terrain_structure_instances = make([dynamic]Terrain_Structure_Instance, 0, 32, allocator=context.allocator)
 		ctx.gs.unlocked_world_areas = make([dynamic]u64, 0, 64, allocator=context.allocator)
+		player.pos = find_player_spawn_pos_near_middle(player, manual_spawn_world_pos(Vec2{0, 0}))
 		_ = unlock_world_area_for_world_pos(player.pos)
 
 		oblisk := entity_create(.oblisk_ent)
@@ -1699,8 +1699,68 @@ manual_spawn_origin_offset :: proc() -> Vec2 {
 	return Vec2{off, off}
 }
 
+is_manual_spawn_point_overlapping_hitbox :: proc(pos: Vec2) -> bool {
+	if is_world_pos_in_water_collision(pos) || is_world_pos_in_terrain_block_collision(pos) {
+		return true
+	}
+
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		hitbox, ok := get_entity_hitbox_rect(e^)
+		if !ok {
+			continue
+		}
+		if shape.rect_contains(hitbox, pos) {
+			return true
+		}
+	}
+	return false
+}
+
+find_clear_manual_spawn_pos :: proc(desired: Vec2) -> Vec2 {
+	if !is_manual_spawn_point_overlapping_hitbox(desired) {
+		return desired
+	}
+
+	grid := ENTITY_GRID_SIZE
+	max_radius_tiles := max(8, WORLD_UNLOCK_AREA_SIZE_TILES*2)
+	for r := 1; r <= max_radius_tiles; r += 1 {
+		found := false
+		best := desired
+		best_d2 := f32(1e30)
+
+		for oy := -r; oy <= r; oy += 1 {
+			for ox := -r; ox <= r; ox += 1 {
+				if !(ox == -r || ox == r || oy == -r || oy == r) {
+					continue
+				}
+
+				candidate := desired + Vec2{f32(ox) * grid, f32(oy) * grid}
+				if is_manual_spawn_point_overlapping_hitbox(candidate) {
+					continue
+				}
+
+				d := candidate - desired
+				d2 := d.x*d.x + d.y*d.y
+				if d2 < best_d2 {
+					best_d2 = d2
+					best = candidate
+					found = true
+				}
+			}
+		}
+
+		if found {
+			return best
+		}
+	}
+
+	return desired
+}
+
 manual_spawn_world_pos :: proc(pos: Vec2) -> Vec2 {
-	return pos + manual_spawn_origin_offset()
+	desired := pos + manual_spawn_origin_offset()
+	return find_clear_manual_spawn_pos(desired)
 }
 
 is_chunk_in_unlocked_world :: proc(chunk_x: int, chunk_y: int) -> bool {
