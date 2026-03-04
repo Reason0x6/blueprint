@@ -250,7 +250,7 @@ load_sprites_into_atlas :: proc() {
 		using stbrp
 
 		// the larger we make this, the longer startup time takes
-		LENGTH :: 1024
+		LENGTH :: 2048
 		atlas.w = LENGTH
 		atlas.h = LENGTH
 		

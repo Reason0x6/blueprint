@@ -50,6 +50,8 @@
 - Fixed placeable preview alignment by matching preview pivot to placed entity pivot (saplings now preview with `bottom_center`), so placement lands where preview indicates.
 - Added four animated bush entities (`bush_1_ent`..`bush_4_ent`) sourced from `Bushes_Bush 1..4` assets, each configured as 8-frame looping world entities.
 - Added engine-friendly bush sprite asset copies (`bushes_bush_1..4.png/.meta`) and render-time downscaling to `64x64` in-world via `0.5` draw scale from their `128x128` source frames.
+- Fixed startup crash (`failed to pack all the rects, ran out of space?`) by increasing texture atlas packing size from `1024` to `2048` in `core_render.odin`.
+- Added explicit bush entity hitboxes (`30x18`, bottom-centered) for `bush_1_ent..bush_4_ent`, while keeping per-bush overlap boxes from sprite data so both collision and overlap debugging are defined per bush type.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.

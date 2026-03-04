@@ -3094,6 +3094,8 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		return shape.rect_make(e.pos , Vec2{18, 13}, pivot=.bottom_center), true
 	case .sprout_ent:
 		return shape.rect_make(e.pos , Vec2{15, 10}, pivot=.bottom_center), true
+	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+		return shape.rect_make(e.pos, Vec2{30, 18}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
