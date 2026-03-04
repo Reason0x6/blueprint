@@ -2948,7 +2948,11 @@ draw_entity_overlap_debug :: proc(e: Entity) {
 		return
 	}
 
-	draw_rect(overlap_rect, col=Vec4{0, 0, 0, 0}, outline_col=Vec4{0.2, 0.9, 1.0, 0.95}, z_layer=.top)
+	layer: ZLayer = .top
+	if is_game_paused() {
+		layer = .pause_menu
+	}
+	draw_rect_outline_only(overlap_rect, Vec4{0.2, 0.9, 1.0, 0.95}, layer, 1)
 }
 
 draw_entity_sort_foot_debug :: proc(e: Entity) {
