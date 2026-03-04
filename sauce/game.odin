@@ -1583,7 +1583,7 @@ draw_structure_maker_ui :: proc() {
 	for r in 0..<max_draw_rows {
 		for c in 0..<max_draw_cols {
 			cell_pos := grid_origin + Vec2{f32(c) * cell, -f32(r+1) * cell}
-			rect := shape.Rect{cell_pos.x, cell_pos.y, cell_pos.x + cell - 1, cell_pos.y + cell - 1}
+			rect := shape.Rect{cell_pos.x, cell_pos.y, cell_pos.x + cell, cell_pos.y + cell}
 			token := ctx.gs.structure_maker_tiles[r][c]
 			draw_structure_maker_tile_preview(rect, token)
 			draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.15}, .pause_menu, 1)
