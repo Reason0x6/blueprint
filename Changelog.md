@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Fixed Structure Maker open crash path by keeping pause active when opening the editor and treating `UI_OVERLAY_STRUCTURE_MAKER` as a paused state in `is_game_paused`, so gameplay update paths do not run under the editor overlay.
+- Structure Maker now supports editing existing structures: select loaded structure (`<`/`>`), `Load` it into the grid, and `Overwrite` to write the updated tiles back to the same structure name in `res/data/terrain_structures.txt`.
 - Structure Maker water token cycling now includes mirrored `a` variants (`-3a`, `-2a`, `-1a`, `0a`) in both forward and backward cycles, and save/export now writes those suffixed tokens to `terrain_structures.txt`.
 - Added Structure Maker middle-mouse paint tool: middle-click picks the hovered tile token, then holding middle mouse and dragging paints hovered tiles with that same token.
 - Structure Maker grid now supports right-click backward cycling per tile token (`... -> -3 <- max <- ...`), while left-click continues forward cycling.

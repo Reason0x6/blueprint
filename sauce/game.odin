@@ -66,9 +66,11 @@ Game_State :: struct {
 	structure_maker_paint_active: bool,
 	structure_maker_paint_token: int,
 	structure_maker_paint_flip_x: bool,
+	structure_maker_selected_index: int,
 	structure_maker_next_id: int,
 	structure_maker_last_saved_id: int,
 	structure_maker_last_save_ok: bool,
+	structure_maker_last_save_attempted: bool,
 	hold_hit_target: Entity_Handle,
 	has_hold_hit_target: bool,
 	hit_cooldown_end_time: f64,
@@ -1125,6 +1127,149 @@ build_structure_expr_from_maker :: proc(cols: int, rows: int) -> string {
 	return string(buf[:])
 }
 
+terrain_tile_to_structure_maker_token :: proc(tile: Terrain_Tile) -> (token: int, flip_x: bool) {
+	switch tile.kind {
+	case .water:
+		v := clamp(tile.water_variant, 1, MAX_WATER_VARIANTS)
+		return 1-v, tile.water_flip_x
+	case .block:
+		if tile.block_index >= 1 && tile.block_index <= TERRAIN_MAX_BLOCK_INDEX {
+			return tile.block_index, false
+		}
+		return TERRAIN_DEFAULT_BLOCK_INDEX, false
+	case .empty:
+		return TERRAIN_DEFAULT_BLOCK_INDEX, false
+	}
+	return TERRAIN_DEFAULT_BLOCK_INDEX, false
+}
+
+structure_maker_tile_to_terrain_tile :: proc(token: int, flip_x: bool) -> Terrain_Tile {
+	if token <= 0 {
+		t := clamp(token, -3, 0)
+		return Terrain_Tile{
+			kind = .water,
+			water_variant = 1 - t,
+			water_flip_x = flip_x,
+		}
+	}
+	return Terrain_Tile{
+		kind = .block,
+		block_index = clamp(token, 1, TERRAIN_MAX_BLOCK_INDEX),
+	}
+}
+
+build_structure_expr_from_data :: proc(st: Terrain_Structure) -> string {
+	if st.cols <= 0 || st.rows <= 0 {
+		return "[[11]]"
+	}
+
+	buf := make([dynamic]u8, 0, max(128, st.cols*st.rows*4), allocator=context.temp_allocator)
+	append(&buf, "[[")
+	for r in 0..<st.rows {
+		if r > 0 {
+			append(&buf, "],[")
+		}
+		for c in 0..<st.cols {
+			if c > 0 {
+				append(&buf, ",")
+			}
+			token, flip := terrain_tile_to_structure_maker_token(st.tiles[r][c])
+			append(&buf, structure_maker_tile_token_to_text(token, flip))
+		}
+	}
+	append(&buf, "]]")
+	return string(buf[:])
+}
+
+write_all_terrain_structures_to_file :: proc() -> bool {
+	path := "res/data/terrain_structures.txt"
+	buf := make([dynamic]u8, 0, 4096, allocator=context.temp_allocator)
+	for i in 0..<len(terrain_structures) {
+		st := terrain_structures[i]
+		if len(st.name) == 0 {
+			continue
+		}
+		expr := build_structure_expr_from_data(st)
+		line := fmt.tprintf("%v = %v\n", st.name, expr)
+		append(&buf, line)
+	}
+
+	f, open_err := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC)
+	if open_err != nil {
+		log.warnf("structure maker failed to open %q for write: %v", path, open_err)
+		return false
+	}
+	defer os.close(f)
+
+	_ = fmt.fprint(f, string(buf[:]))
+	return true
+}
+
+load_structure_into_maker :: proc(index: int) -> bool {
+	if index < 0 || index >= len(terrain_structures) {
+		return false
+	}
+
+	st := terrain_structures[index]
+	if st.cols <= 0 || st.rows <= 0 {
+		return false
+	}
+
+	reset_structure_maker_tiles()
+	rows := clamp(st.rows, 1, MAX_TERRAIN_STRUCTURE_ROWS)
+	cols := clamp(st.cols, 1, MAX_TERRAIN_STRUCTURE_COLS)
+	ctx.gs.structure_maker_rows = rows
+	ctx.gs.structure_maker_cols = cols
+	ctx.gs.structure_maker_selected_index = index
+
+	for r in 0..<rows {
+		for c in 0..<cols {
+			tok, flip := terrain_tile_to_structure_maker_token(st.tiles[r][c])
+			ctx.gs.structure_maker_tiles[r][c] = tok
+			ctx.gs.structure_maker_tiles_flip_x[r][c] = flip
+		}
+	}
+	return true
+}
+
+overwrite_structure_from_maker :: proc(index: int) -> bool {
+	if index < 0 || index >= len(terrain_structures) {
+		ctx.gs.structure_maker_last_save_attempted = true
+		ctx.gs.structure_maker_last_save_ok = false
+		return false
+	}
+
+	cols := clamp(ctx.gs.structure_maker_cols, 1, MAX_TERRAIN_STRUCTURE_COLS)
+	rows := clamp(ctx.gs.structure_maker_rows, 1, MAX_TERRAIN_STRUCTURE_ROWS)
+	st := &terrain_structures[index]
+	st.cols = cols
+	st.rows = rows
+
+	for r in 0..<MAX_TERRAIN_STRUCTURE_ROWS {
+		for c in 0..<MAX_TERRAIN_STRUCTURE_COLS {
+			if r < rows && c < cols {
+				tok := ctx.gs.structure_maker_tiles[r][c]
+				flip := ctx.gs.structure_maker_tiles_flip_x[r][c]
+				st.tiles[r][c] = structure_maker_tile_to_terrain_tile(tok, flip)
+			} else {
+				st.tiles[r][c] = {}
+			}
+		}
+	}
+
+	if !write_all_terrain_structures_to_file() {
+		ctx.gs.structure_maker_last_save_attempted = true
+		ctx.gs.structure_maker_last_save_ok = false
+		return false
+	}
+
+	ctx.gs.structure_maker_last_save_attempted = true
+	ctx.gs.structure_maker_last_save_ok = true
+	ctx.gs.structure_maker_selected_index = index
+	ctx.gs.structure_maker_last_saved_id = 0
+	return true
+}
+
 save_structure_from_maker :: proc() -> bool {
 	cols := clamp(ctx.gs.structure_maker_cols, 1, MAX_TERRAIN_STRUCTURE_COLS)
 	rows := clamp(ctx.gs.structure_maker_rows, 1, MAX_TERRAIN_STRUCTURE_ROWS)
@@ -1155,6 +1300,7 @@ save_structure_from_maker :: proc() -> bool {
 	f, open_err := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC)
 	if open_err != nil {
 		log.warnf("structure maker failed to open %q for write: %v", path, open_err)
+		ctx.gs.structure_maker_last_save_attempted = true
 		ctx.gs.structure_maker_last_save_ok = false
 		return false
 	}
@@ -1164,11 +1310,14 @@ save_structure_from_maker :: proc() -> bool {
 
 	// Keep runtime list in sync immediately without requiring restart.
 	if !parse_terrain_structure_expr(name, expr) {
+		ctx.gs.structure_maker_last_save_attempted = true
 		ctx.gs.structure_maker_last_save_ok = false
 		return false
 	}
 
+	ctx.gs.structure_maker_selected_index = len(terrain_structures) - 1
 	ctx.gs.structure_maker_last_saved_id = save_id
+	ctx.gs.structure_maker_last_save_attempted = true
 	ctx.gs.structure_maker_last_save_ok = true
 	return true
 }
@@ -1484,7 +1633,9 @@ draw_pause_menu_ui :: proc() {
 	draw_rect(struct_maker_rect, col=struct_maker_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
 	draw_text((struct_maker_rect.xy+struct_maker_rect.zw)*0.5, "Structure Maker", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.46)
 	if struct_maker_pressed {
-		set_ui_overlay_open(UI_OVERLAY_PAUSE, false)
+		if len(terrain_structures) > 0 && (ctx.gs.structure_maker_selected_index < 0 || ctx.gs.structure_maker_selected_index >= len(terrain_structures)) {
+			ctx.gs.structure_maker_selected_index = 0
+		}
 		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, true)
 	}
 }
@@ -1544,6 +1695,11 @@ draw_structure_maker_ui :: proc() {
 	rows := clamp(ctx.gs.structure_maker_rows, 1, MAX_TERRAIN_STRUCTURE_ROWS)
 	ctx.gs.structure_maker_cols = cols
 	ctx.gs.structure_maker_rows = rows
+	if len(terrain_structures) > 0 {
+		ctx.gs.structure_maker_selected_index = clamp(ctx.gs.structure_maker_selected_index, 0, len(terrain_structures)-1)
+	} else {
+		ctx.gs.structure_maker_selected_index = -1
+	}
 
 	btn_size := Vec2{18, 12}
 	row_y := panel.w - 24
@@ -1555,6 +1711,10 @@ draw_structure_maker_ui :: proc() {
 	row_plus := shape.rect_make(Vec2{panel.x + 186, row_y}, btn_size, pivot=.top_left)
 	save_rect := shape.rect_make(Vec2{panel.x + 214, row_y}, Vec2{46, 12}, pivot=.top_left)
 	clear_rect := shape.rect_make(Vec2{panel.x + 264, row_y}, Vec2{46, 12}, pivot=.top_left)
+	prev_struct_rect := shape.rect_make(Vec2{panel.x + 8, row_y - 34}, Vec2{18, 12}, pivot=.top_left)
+	next_struct_rect := shape.rect_make(Vec2{panel.x + 30, row_y - 34}, Vec2{18, 12}, pivot=.top_left)
+	load_struct_rect := shape.rect_make(Vec2{panel.x + 54, row_y - 34}, Vec2{38, 12}, pivot=.top_left)
+	overwrite_struct_rect := shape.rect_make(Vec2{panel.x + 96, row_y - 34}, Vec2{58, 12}, pivot=.top_left)
 
 	draw_debug_ui_button :: proc(rect: shape.Rect, label: string) -> bool {
 		hover, pressed := raw_button(rect)
@@ -1585,16 +1745,45 @@ draw_structure_maker_ui :: proc() {
 	if draw_debug_ui_button(save_rect, "Save") {
 		_ = save_structure_from_maker()
 	}
+	if draw_debug_ui_button(prev_struct_rect, "<") && len(terrain_structures) > 0 {
+		ctx.gs.structure_maker_selected_index -= 1
+		if ctx.gs.structure_maker_selected_index < 0 {
+			ctx.gs.structure_maker_selected_index = len(terrain_structures) - 1
+		}
+	}
+	if draw_debug_ui_button(next_struct_rect, ">") && len(terrain_structures) > 0 {
+		ctx.gs.structure_maker_selected_index += 1
+		if ctx.gs.structure_maker_selected_index >= len(terrain_structures) {
+			ctx.gs.structure_maker_selected_index = 0
+		}
+	}
+	if draw_debug_ui_button(load_struct_rect, "Load") && len(terrain_structures) > 0 {
+		_ = load_structure_into_maker(ctx.gs.structure_maker_selected_index)
+	}
+	if draw_debug_ui_button(overwrite_struct_rect, "Overwrite") && len(terrain_structures) > 0 {
+		_ = overwrite_structure_from_maker(ctx.gs.structure_maker_selected_index)
+	}
+
+	selected_label := "Selected: none"
+	if len(terrain_structures) > 0 && ctx.gs.structure_maker_selected_index >= 0 && ctx.gs.structure_maker_selected_index < len(terrain_structures) {
+		st := terrain_structures[ctx.gs.structure_maker_selected_index]
+		selected_label = fmt.tprintf("Selected: %v (%v x %v)", st.name, st.cols, st.rows)
+	}
+	draw_text(Vec2{panel.x + 160, row_y - 32}, selected_label, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.88, 0.93, 1.0, 0.86}, drop_shadow_col=Vec4{}, scale=0.34)
 
 	status := "Last save: none"
-	if ctx.gs.structure_maker_last_saved_id > 0 {
+	if ctx.gs.structure_maker_last_save_attempted {
 		if ctx.gs.structure_maker_last_save_ok {
-			status = fmt.tprintf("Saved: maker_%03d", ctx.gs.structure_maker_last_saved_id)
+			if ctx.gs.structure_maker_last_saved_id > 0 {
+				status = fmt.tprintf("Saved: maker_%03d", ctx.gs.structure_maker_last_saved_id)
+			} else {
+				status = "Saved existing structure"
+			}
 		} else {
 			status = "Save failed"
 		}
 	}
-	draw_text(Vec2{panel.x + 8, row_y - 11}, status, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
+	draw_text(Vec2{panel.x + 8, row_y - 48}, status, pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
 	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB fwd, RMB back, MMB drag paint", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
 
 	if !key_down(.MIDDLE_MOUSE) {
@@ -1721,6 +1910,9 @@ game_update :: proc() {
 		ctx.gs.structure_maker_cols = 10
 		ctx.gs.structure_maker_rows = 6
 		ctx.gs.structure_maker_next_id = len(terrain_structures) + 1
+		ctx.gs.structure_maker_selected_index = 0 if len(terrain_structures) > 0 else -1
+		ctx.gs.structure_maker_last_save_attempted = false
+		ctx.gs.structure_maker_last_save_ok = true
 		reset_structure_maker_tiles()
 		player.pos = manual_spawn_world_pos_for_hitbox(Vec2{0, 0}, Vec2{8, 8}, .bottom_center)
 		_ = unlock_world_area_for_world_pos(player.pos)
@@ -4000,7 +4192,7 @@ close_all_ui_overlays :: proc() {
 }
 
 is_game_paused :: proc() -> bool {
-	return is_ui_overlay_open(UI_OVERLAY_PAUSE)
+	return is_ui_overlay_open(UI_OVERLAY_PAUSE) || is_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER)
 }
 
 crafting_set_output :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) {
