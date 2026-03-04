@@ -1729,12 +1729,11 @@ get_unlocked_world_tile_bounds :: proc() -> (min_tile_x: int, min_tile_y: int, m
 		return 0, 0, 0, 0, false
 	}
 
-	half := WORLD_UNLOCK_AREA_SIZE_TILES / 2
 	first := true
 	for key in ctx.gs.unlocked_world_areas {
 		ax, ay := world_area_coords_from_key(key)
-		area_min_x := ax*WORLD_UNLOCK_AREA_SIZE_TILES - half
-		area_min_y := ay*WORLD_UNLOCK_AREA_SIZE_TILES - half
+		area_min_x := ax * WORLD_UNLOCK_AREA_SIZE_TILES
+		area_min_y := ay * WORLD_UNLOCK_AREA_SIZE_TILES
 		area_max_x := area_min_x + WORLD_UNLOCK_AREA_SIZE_TILES - 1
 		area_max_y := area_min_y + WORLD_UNLOCK_AREA_SIZE_TILES - 1
 
