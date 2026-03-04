@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Synced all remaining pending workspace changes into one commit, including current `res/data/terrain_structures.txt` edits.
 - Moved Structure Maker existing-structure controls (`<`, `>`, `Load`, `Overwrite`) and selection/status labels to the panel bottom area so they remain visible/clickable and are no longer obscured by the tile grid.
 - Fixed a Structure Maker/edit-existing crash (`memory could not be read`) by cloning parsed terrain structure names into persistent allocator memory (`context.allocator`) instead of storing temporary string slices from file parse buffers.
 - Changed Structure Maker overlay flow to run as its own paused screen (pause menu hidden while maker is open, and restored on close), preventing simultaneous pause-menu + maker button processing during editor interaction.
