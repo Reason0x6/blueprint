@@ -59,7 +59,7 @@ get_world_space_camera :: proc() -> Matrix4 {
 	return cam
 }
 get_camera_zoom :: proc() -> f32 {
-	return f32(GAME_RES_HEIGHT) / f32(window_h)
+	return (f32(GAME_RES_HEIGHT) / f32(window_h)) * 0.95
 }
 
 get_screen_space_proj :: proc() -> Matrix4 {
