@@ -91,6 +91,11 @@ HITBOX_CORNER_CUT: f32 : 9
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
 DURABILITY_REGEN_DELAY_SEC: f64 : 0.5
 DURABILITY_REGEN_PER_SEC: f32 : 2.0
+SPROUT_GROWTH_BASE_SEC: f64 : 60.0
+SPROUT_GROWTH_JITTER_SEC: f64 : 20.0
+SAPLING_GROWTH_BASE_SEC: f64 : 120.0
+SAPLING_GROWTH_JITTER_SEC: f64 : 40.0
+GROWTH_RETRY_DELAY_SEC: f64 : 4.0
 ITEM_DROP_BOUNCE_SPEED: f32 : 95
 ITEM_DROP_BOUNCE_DRAG: f32 : 6.5
 ITEM_DROP_PICKUP_DELAY_SEC: f64 : 0.25
@@ -301,6 +306,7 @@ Entity :: struct {
 	pending_place_item: Item_Kind,
 	pending_place_pos: Vec2,
 	has_pending_place: bool,
+	growth_ready_time: f64,
 	
 	// this gets zeroed every frame. Useful for passing data to other systems.
 	scratch: struct {
@@ -4241,6 +4247,61 @@ roll_chance :: proc(chance: f32, salt: u64) -> bool {
 
 entity_on_hit_noop :: proc(_: ^Entity, _: ^Entity) {}
 
+schedule_entity_growth :: proc(e: ^Entity, base_sec: f64, jitter_sec: f64, salt: u64) {
+	if base_sec <= 0 {
+		e.growth_ready_time = 0
+		return
+	}
+
+	j := max(0.0, jitter_sec)
+	seed := u64(e.handle.id)*11400714819323198485 + salt*6364136223846793005
+	offset := (f64(random01_from_seed(seed))*2.0 - 1.0) * j
+	delay := max(1.0, base_sec+offset)
+	e.growth_ready_time = now() + delay
+}
+
+growth_hitbox_for_kind_at_pos :: proc(kind: Entity_Kind, pos: Vec2) -> (shape.Rect, bool) {
+	#partial switch kind {
+	case .sapling_ent:
+		return shape.rect_make(pos, Vec2{18, 13}, pivot=.bottom_center), true
+	case .tree_ent:
+		return shape.rect_make(pos, Vec2{50, 30}, pivot=.bottom_center), true
+	case:
+		return {}, false
+	}
+}
+
+can_grow_entity_into_kind :: proc(e: ^Entity, next_kind: Entity_Kind) -> bool {
+	next_hitbox, ok := growth_hitbox_for_kind_at_pos(next_kind, e.pos)
+	if !ok {
+		return true
+	}
+
+	player := get_player()
+	if is_valid(player^) {
+		player_hitbox, player_ok := get_entity_hitbox_rect(player^)
+		if player_ok {
+			hit, _ := rounded_hitbox_collide_rect(player_hitbox, next_hitbox, HITBOX_CORNER_CUT)
+			if hit {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+grow_entity_into_kind :: proc(e: ^Entity, next_kind: Entity_Kind) {
+	if !can_grow_entity_into_kind(e, next_kind) {
+		e.growth_ready_time = now() + GROWTH_RETRY_DELAY_SEC
+		return
+	}
+
+	next := entity_create(next_kind)
+	next.pos = e.pos
+	entity_destroy(e)
+}
+
 entity_on_hit_tree :: proc(target: ^Entity, hitter: ^Entity) {
 	chance := TREE_WOOD_HIT_DROP_CHANCE * get_hit_item_multiplier(hitter)
 	if roll_chance(chance, u64(target.handle.id)) {
@@ -5138,8 +5199,13 @@ setup_sapling_ent :: proc(using e: ^Entity) {
 	clear_entity_break_drops(e)
 	add_entity_break_drop(e, .wood, 1)
 	on_hit_proc = entity_on_hit_noop
+	schedule_entity_growth(e, SAPLING_GROWTH_BASE_SEC, SAPLING_GROWTH_JITTER_SEC, 0x51A9)
 
-	e.update_proc = proc(_: ^Entity) {}
+	e.update_proc = proc(e: ^Entity) {
+		if e.growth_ready_time > 0 && now() >= e.growth_ready_time {
+			grow_entity_into_kind(e, .tree_ent)
+		}
+	}
 	e.draw_proc = proc(e: Entity) {
 		draw_entity_default(e)
 	}
@@ -5154,8 +5220,13 @@ setup_sprout_ent :: proc(using e: ^Entity) {
 	clear_entity_break_drops(e)
 	add_entity_break_drop(e, .fiber, 1)
 	on_hit_proc = entity_on_hit_noop
+	schedule_entity_growth(e, SPROUT_GROWTH_BASE_SEC, SPROUT_GROWTH_JITTER_SEC, 0x5A70)
 
-	e.update_proc = proc(_: ^Entity) {}
+	e.update_proc = proc(e: ^Entity) {
+		if e.growth_ready_time > 0 && now() >= e.growth_ready_time {
+			grow_entity_into_kind(e, .sapling_ent)
+		}
+	}
 	e.draw_proc = proc(e: Entity) {
 		draw_entity_default(e)
 	}

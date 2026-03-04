@@ -44,6 +44,8 @@
 - Strengthened manual/player startup spawning to use full hitbox-overlap checks (terrain + entity hitboxes) via `manual_spawn_world_pos_for_hitbox`, and applied explicit hitbox sizes for startup entity placements.
 - Fixed startup spawn resolution edge case where locked-area checks blocked all candidates before the first area unlock by treating lock checks as inactive until at least one world area is unlocked.
 - Chunk structure spawning now rejects placements that overlap the player hitbox and retries deterministic candidate placements, preventing startup/player trapping when structures generate near spawn.
+- Added timed plant growth with per-entity randomness: sprouts grow into saplings at ~60s (`+/-` jitter), and saplings grow into trees at ~120s (`+/-` jitter).
+- Growth now retries after a short delay if the next growth stage would overlap the player hitbox, preventing forced player trapping during transformation.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
