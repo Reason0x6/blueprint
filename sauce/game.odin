@@ -1334,7 +1334,7 @@ game_update :: proc() {
 	// setup world for first game tick
 	if ctx.gs.ticks == 0 {
 		player := entity_create(.player)
-		player.pos = manual_spawn_world_pos(Vec2{0, 0})
+		player.pos = find_player_spawn_pos_near_middle(player, manual_spawn_world_pos(Vec2{0, 0}))
 		ctx.gs.player_handle = player.handle
 		ctx.gs.inventory.equipped_slot = HOTBAR_SLOT_START
 		ctx.gs.debug_show_grid = false
@@ -1722,6 +1722,74 @@ is_chunk_in_unlocked_world :: proc(chunk_x: int, chunk_y: int) -> bool {
 		}
 	}
 	return false
+}
+
+is_spawn_pos_blocked_for_player_ignore_locked :: proc(player: ^Entity, pos: Vec2) -> bool {
+	probe := player^
+	probe.pos = pos
+	player_hitbox, ok := get_entity_hitbox_rect(probe)
+	if !ok {
+		return false
+	}
+
+	if is_rect_touching_water_collision(player_hitbox) || is_rect_touching_terrain_block_collision(player_hitbox) {
+		return true
+	}
+
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		if !e.blocks_player do continue
+		if e.handle.id == player.handle.id do continue
+
+		blocker_hitbox, blocker_ok := get_entity_hitbox_rect(e^)
+		if !blocker_ok do continue
+		hit, _ := rounded_hitbox_collide_rect(player_hitbox, blocker_hitbox, HITBOX_CORNER_CUT)
+		if hit {
+			return true
+		}
+	}
+	return false
+}
+
+find_player_spawn_pos_near_middle :: proc(player: ^Entity, desired_center: Vec2) -> Vec2 {
+	if !is_spawn_pos_blocked_for_player_ignore_locked(player, desired_center) {
+		return desired_center
+	}
+
+	grid := ENTITY_GRID_SIZE
+	max_radius_tiles := max(8, WORLD_UNLOCK_AREA_SIZE_TILES*2)
+	for r := 1; r <= max_radius_tiles; r += 1 {
+		found := false
+		best := desired_center
+		best_d2 := f32(1e30)
+
+		for oy := -r; oy <= r; oy += 1 {
+			for ox := -r; ox <= r; ox += 1 {
+				if !(ox == -r || ox == r || oy == -r || oy == r) {
+					continue
+				}
+
+				candidate := desired_center + Vec2{f32(ox) * grid, f32(oy) * grid}
+				if is_spawn_pos_blocked_for_player_ignore_locked(player, candidate) {
+					continue
+				}
+
+				d := candidate - desired_center
+				d2 := d.x*d.x + d.y*d.y
+				if d2 < best_d2 {
+					best_d2 = d2
+					best = candidate
+					found = true
+				}
+			}
+		}
+
+		if found {
+			return best
+		}
+	}
+
+	return desired_center
 }
 
 get_unlocked_world_tile_bounds :: proc() -> (min_tile_x: int, min_tile_y: int, max_tile_x: int, max_tile_y: int, ok: bool) {
