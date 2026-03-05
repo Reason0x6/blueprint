@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [4c02107] Optimize entity depth-order key calculation by using world feet Y instead of per-call camera matrix transforms
 - Optimized depth-order and behind-check keying by making sort-screen-Y resolve directly from world feet Y (equivalent for the current orthographic camera), removing repeated per-entity matrix inverse/projection work in hot draw paths.
 
 ## [5d5b00b] Add perf debug stats UI and reduce vegetation-related frame cost while making tree/bush placement look more natural
