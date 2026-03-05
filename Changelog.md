@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [a14bfbc] Spawn 5-10 trees per unlocked chunk after structures while rejecting hitbox-overlapping placements
 - Chunk generation now spawns a deterministic random `5..10` trees per unlocked chunk (after structure placement), and tree spawn positions now reject any overlap with existing hitboxes (terrain/water/entity) before creating the entity.
 - Reworked structure transparent-background control to per-cell backing data using a second saved matrix (`[[tiles]]||[[backing]]`), with Structure Maker `Layer: FG/Backing` editing so each position can independently choose water (`0`) or block11 (`11`) behind transparent structure tiles.
 - Kept backward compatibility for older per-structure underlay headers (`name{underlay=block11}`) by using them as defaults when a structure entry has no explicit per-cell backing matrix.
