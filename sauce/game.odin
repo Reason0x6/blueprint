@@ -2609,6 +2609,9 @@ game_update :: proc() {
 		player := get_player()
 		if is_valid(player^) {
 			target := mouse_pos_in_current_space()
+			if key_pressed(.RIGHT_MOUSE) {
+				spawn_movement_indicator(target)
+			}
 			if !is_world_position_blocked_for_player(target) {
 				player.move_target = target
 				player.has_move_target = true
