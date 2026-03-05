@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Replaced draw-order insertion sort (O(n²)) with key-based iterative quicksort (O(n log n)) over visible entity handles, reducing CPU cost when many entities are on-screen.
 
 ## [4c02107] Optimize entity depth-order key calculation by using world feet Y instead of per-call camera matrix transforms
 - Optimized depth-order and behind-check keying by making sort-screen-Y resolve directly from world feet Y (equivalent for the current orthographic camera), removing repeated per-entity matrix inverse/projection work in hot draw paths.

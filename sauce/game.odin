@@ -2293,6 +2293,7 @@ game_draw :: proc() {
 		bush_count := 0
 		grass_count := 0
 		draw_order := make([dynamic]Entity_Handle, 0, len(get_all_ents()), allocator=context.temp_allocator)
+		draw_order_keys := make([dynamic]f32, 0, len(get_all_ents()), allocator=context.temp_allocator)
 		for handle in get_all_ents() {
 			e := entity_from_handle(handle)
 			total_entities += 1
@@ -2310,6 +2311,7 @@ game_draw :: proc() {
 			}
 			visible_entities += 1
 			append(&draw_order, handle)
+			append(&draw_order_keys, get_entity_sort_screen_y(e^))
 		}
 		ctx.gs.perf_last_total_entities = total_entities
 		ctx.gs.perf_last_visible_entities = visible_entities
@@ -2318,22 +2320,8 @@ game_draw :: proc() {
 		ctx.gs.perf_last_bushes = bush_count
 		ctx.gs.perf_last_grass = grass_count
 
-		// Draw top-to-bottom in screen space so lower-on-screen entities render in front.
-		for i in 1..<len(draw_order) {
-			key := draw_order[i]
-			key_y := get_entity_sort_screen_y(entity_from_handle(key)^)
-			j := i
-
-			for j > 0 {
-				prev := entity_from_handle(draw_order[j-1])
-				prev_y := get_entity_sort_screen_y(prev^)
-				if prev_y <= key_y do break
-				draw_order[j] = draw_order[j-1]
-				j -= 1
-			}
-
-			draw_order[j] = key
-		}
+		// Draw top-to-bottom so lower-on-screen entities render in front.
+		sort_entity_draw_order_by_key(&draw_order, &draw_order_keys)
 
 		for handle in draw_order {
 			e := entity_from_handle(handle)
@@ -4303,6 +4291,62 @@ is_entity_pos_in_view_with_margin :: proc(pos: Vec2, cam_pos: Vec2, half_view: V
 	if math.abs(pos.x-cam_pos.x) > half_view.x+margin do return false
 	if math.abs(pos.y-cam_pos.y) > half_view.y+margin do return false
 	return true
+}
+
+sort_entity_draw_order_by_key :: proc(handles: ^[dynamic]Entity_Handle, keys: ^[dynamic]f32) {
+	n := len(handles^)
+	if n <= 1 || len(keys^) != n {
+		return
+	}
+	lo_stack: [64]int
+	hi_stack: [64]int
+	sp := 0
+	lo_stack[sp] = 0
+	hi_stack[sp] = n - 1
+	sp += 1
+
+	for sp > 0 {
+		sp -= 1
+		lo := lo_stack[sp]
+		hi := hi_stack[sp]
+
+		for lo < hi {
+			i := lo
+			j := hi
+			pivot := keys[(lo+hi)/2]
+			for i <= j {
+				for keys[i] < pivot {
+					i += 1
+				}
+				for keys[j] > pivot {
+					j -= 1
+				}
+				if i <= j {
+					handles[i], handles[j] = handles[j], handles[i]
+					keys[i], keys[j] = keys[j], keys[i]
+					i += 1
+					j -= 1
+				}
+			}
+
+			// Tail-partition first; push the larger side to keep stack shallow.
+			if (j - lo) > (hi - i) {
+				if lo < j {
+					lo_stack[sp] = lo
+					hi_stack[sp] = j
+					sp += 1
+				}
+				lo = i
+			} else {
+				if i < hi {
+					lo_stack[sp] = i
+					hi_stack[sp] = hi
+					sp += 1
+				}
+				hi = j
+			}
+		}
+	}
 }
 
 resolve_player_vs_hitboxes :: proc() {
