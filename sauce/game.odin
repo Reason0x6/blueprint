@@ -4064,15 +4064,9 @@ get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
 }
 
 get_entity_sort_screen_y :: proc(e: Entity) -> f32 {
-	feet_world_y := get_entity_sort_y(e)
-	view := linalg.inverse(get_world_space_camera())
-	clip := get_world_space_proj() * view * Vec4{0, feet_world_y, 0, 1}
-	if clip.w == 0 {
-		return 0
-	}
-	ndc_y := clip.y / clip.w
-	// Window-space Y grows downward; larger values are lower on screen.
-	return (1.0 - ndc_y) * 0.5 * f32(window_h)
+	// With current orthographic camera (no rotation, positive scale), world feet Y ordering
+	// is equivalent to on-screen Y ordering and avoids per-entity matrix work.
+	return get_entity_sort_y(e)
 }
 
 is_player_behind_entity :: proc(e: Entity) -> bool {
