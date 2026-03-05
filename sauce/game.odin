@@ -2132,20 +2132,6 @@ game_update :: proc() {
 
 		oblisk := entity_create(.oblisk_ent)
 		oblisk.pos = manual_spawn_world_pos_for_hitbox(Vec2{64, 0}, Vec2{40, 40}, .bottom_center)
-		tree := entity_create(.tree_ent)
-		tree.pos = manual_spawn_world_pos_for_hitbox(Vec2{26, 0}, Vec2{50, 30}, .bottom_center)
-		sapling := entity_create(.sapling_ent)
-		sapling.pos = manual_spawn_world_pos_for_hitbox(Vec2{-40, 0}, Vec2{18, 13}, .bottom_center)
-		sprout := entity_create(.sprout_ent)
-		sprout.pos = manual_spawn_world_pos_for_hitbox(Vec2{-80, 0}, Vec2{15, 10}, .bottom_center)
-		bush1 := entity_create(.bush_1_ent)
-		bush1.pos = manual_spawn_world_pos(Vec2{40, -40})
-		bush2 := entity_create(.bush_2_ent)
-		bush2.pos = manual_spawn_world_pos(Vec2{72, -40})
-		bush3 := entity_create(.bush_3_ent)
-		bush3.pos = manual_spawn_world_pos(Vec2{104, -40})
-		bush4 := entity_create(.bush_4_ent)
-		bush4.pos = manual_spawn_world_pos(Vec2{136, -40})
 
 		spawn_item_pickup(.wood, 4, manual_spawn_world_pos(Vec2{-68, 8}))
 		spawn_item_pickup(.stone, 3, manual_spawn_world_pos(Vec2{-86, 8}))
@@ -3372,25 +3358,15 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	placed_rects := make([dynamic]shape.Rect, 0, target_spawn_count, allocator=context.temp_allocator)
 	base_seed := u64(i64(chunk_x)*116129781 + i64(chunk_y)*961748927)
 	placed := 0
-	tile_count := BIOME_CHUNK_SIZE_TILES * BIOME_CHUNK_SIZE_TILES
-	start := int((base_seed ~ 0x9E3779B9) % u64(tile_count))
-	step := int((base_seed ~ 0x7F4A7C15) % u64(tile_count))
-	if step <= 0 {
-		step = 1
-	}
-	if step % 2 == 0 {
-		step += 1
-	}
-	idx := start
+	order := build_shuffled_chunk_tile_indices(chunk_x, chunk_y, base_seed~0x9E3779B9)
 	chunk_min_x := chunk_x * BIOME_CHUNK_SIZE_TILES
 	chunk_min_y := chunk_y * BIOME_CHUNK_SIZE_TILES
-	for checked := 0; checked < tile_count; checked += 1 {
+	for idx in order {
 		if placed >= target_spawn_count || !can_spawn_entity_now() {
 			break
 		}
 		tile_x := chunk_min_x + (idx % BIOME_CHUNK_SIZE_TILES)
 		tile_y := chunk_min_y + (idx / BIOME_CHUNK_SIZE_TILES)
-		idx = (idx + step) % tile_count
 
 		if !is_terrain_solid_tile(tile_x, tile_y) {
 			continue
@@ -3428,25 +3404,15 @@ spawn_bushes_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	existing_overlap_rects := collect_chunk_spawn_overlap_rects(chunk_x, chunk_y, tile_size)
 	placed_rects := make([dynamic]shape.Rect, 0, target_spawn_count, allocator=context.temp_allocator)
 	base_seed := u64(i64(chunk_x)*4256249 + i64(chunk_y)*741457)
-	tile_count := BIOME_CHUNK_SIZE_TILES * BIOME_CHUNK_SIZE_TILES
-	start := int((base_seed ~ 0x94D049BB133111EB) % u64(tile_count))
-	step := int((base_seed ~ 0xD2B74407B1CE6E93) % u64(tile_count))
-	if step <= 0 {
-		step = 1
-	}
-	if step % 2 == 0 {
-		step += 1
-	}
-	idx := start
+	order := build_shuffled_chunk_tile_indices(chunk_x, chunk_y, base_seed~0xD2B74407B1CE6E93)
 	chunk_min_x := chunk_x * BIOME_CHUNK_SIZE_TILES
 	chunk_min_y := chunk_y * BIOME_CHUNK_SIZE_TILES
-	for checked := 0; checked < tile_count; checked += 1 {
+	for idx in order {
 		if spawned >= target_spawn_count || !can_spawn_entity_now() {
 			break
 		}
 		tile_x := chunk_min_x + (idx % BIOME_CHUNK_SIZE_TILES)
 		tile_y := chunk_min_y + (idx / BIOME_CHUNK_SIZE_TILES)
-		idx = (idx + step) % tile_count
 
 		if !is_terrain_solid_tile(tile_x, tile_y) {
 			continue
@@ -3490,6 +3456,21 @@ random_tile_world_pos_with_jitter :: proc(tile_x: int, tile_y: int, tile_size: V
 	jx := (random01_from_seed(seed ~ 0x632BE59BD9B4E019) * 2.0 - 1.0) * jitter_px
 	jy := (random01_from_seed(seed ~ 0x8CB92BA72F3D8DD7) * 2.0 - 1.0) * jitter_px
 	return base + Vec2{jx, jy}
+}
+
+build_shuffled_chunk_tile_indices :: proc(chunk_x: int, chunk_y: int, seed: u64) -> [dynamic]int {
+	tile_count := BIOME_CHUNK_SIZE_TILES * BIOME_CHUNK_SIZE_TILES
+	order := make([dynamic]int, 0, tile_count, allocator=context.temp_allocator)
+	for i in 0..<tile_count {
+		append(&order, i)
+	}
+	// Deterministic Fisher-Yates shuffle per chunk to avoid directional spawn artifacts.
+	for i := tile_count - 1; i > 0; i -= 1 {
+		r := random01_from_seed(seed + u64(i)*0x9E3779B97F4A7C15)
+		j := clamp(int(math.floor(r * f32(i+1))), 0, i)
+		order[i], order[j] = order[j], order[i]
+	}
+	return order
 }
 
 structure_overlaps_player_hitbox :: proc(st: Terrain_Structure, origin_tile_x: int, origin_tile_y: int, player_hitbox: shape.Rect) -> bool {
