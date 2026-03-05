@@ -4052,9 +4052,9 @@ get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
 }
 
 get_entity_sort_screen_y :: proc(e: Entity) -> f32 {
-	// With current orthographic camera (no rotation, positive scale), world feet Y ordering
-	// is equivalent to on-screen Y ordering and avoids per-entity matrix work.
-	return get_entity_sort_y(e)
+	// With current orthographic camera, world +Y is up while screen +Y is down.
+	// Negate world feet Y so larger key means lower on screen.
+	return -get_entity_sort_y(e)
 }
 
 is_player_behind_entity :: proc(e: Entity) -> bool {
