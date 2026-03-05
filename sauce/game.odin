@@ -1888,10 +1888,18 @@ draw_pause_menu_ui :: proc() {
 		close_all_ui_overlays()
 	}
 
-	debug_button_size := Vec2{124, 16}
-	debug_start := Vec2{cx, cy + 22}
+	debug_button_size := Vec2{60, 16}
+	col_sep: f32 = 4
+	row_step: f32 = 18
+	left_x := cx - (debug_button_size.x*0.5 + col_sep*0.5)
+	right_x := cx + (debug_button_size.x*0.5 + col_sep*0.5)
+	row0_y := cy + 22
+	row1_y := row0_y - row_step
+	row2_y := row1_y - row_step
+	row3_y := row2_y - row_step
+	row4_y := row3_y - row_step
 
-	hitboxes_rect := shape.rect_make(debug_start, debug_button_size, pivot=.center_center)
+	hitboxes_rect := shape.rect_make(Vec2{left_x, row0_y}, debug_button_size, pivot=.center_center)
 	hitboxes_hover, hitboxes_pressed := raw_button(hitboxes_rect)
 	if hitboxes_pressed {
 		ctx.gs.debug_show_hitboxes = !ctx.gs.debug_show_hitboxes
@@ -1901,11 +1909,11 @@ draw_pause_menu_ui :: proc() {
 		hitboxes_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(hitboxes_rect, col=hitboxes_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	hitboxes_label := ctx.gs.debug_show_hitboxes ? "Hitboxes: ON" : "Hitboxes: OFF"
+	hitboxes_label := ctx.gs.debug_show_hitboxes ? "Hitbox ON" : "Hitbox OFF"
 	hitboxes_center := (hitboxes_rect.xy + hitboxes_rect.zw) * 0.5
-	draw_text(hitboxes_center, hitboxes_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text(hitboxes_center, hitboxes_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
-	overlap_rect := shape.rect_make(debug_start + Vec2{0, -18}, debug_button_size, pivot=.center_center)
+	overlap_rect := shape.rect_make(Vec2{right_x, row0_y}, debug_button_size, pivot=.center_center)
 	overlap_hover, overlap_pressed := raw_button(overlap_rect)
 	if overlap_pressed {
 		ctx.gs.debug_show_overlap_boxes = !ctx.gs.debug_show_overlap_boxes
@@ -1915,11 +1923,11 @@ draw_pause_menu_ui :: proc() {
 		overlap_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(overlap_rect, col=overlap_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	overlap_label := ctx.gs.debug_show_overlap_boxes ? "Overlap: ON" : "Overlap: OFF"
+	overlap_label := ctx.gs.debug_show_overlap_boxes ? "Overlap ON" : "Overlap OFF"
 	overlap_center := (overlap_rect.xy + overlap_rect.zw) * 0.5
-	draw_text(overlap_center, overlap_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text(overlap_center, overlap_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
-	dura_rect := shape.rect_make(debug_start + Vec2{0, -36}, debug_button_size, pivot=.center_center)
+	dura_rect := shape.rect_make(Vec2{left_x, row1_y}, debug_button_size, pivot=.center_center)
 	dura_hover, dura_pressed := raw_button(dura_rect)
 	if dura_pressed {
 		ctx.gs.debug_show_durability = !ctx.gs.debug_show_durability
@@ -1929,11 +1937,11 @@ draw_pause_menu_ui :: proc() {
 		dura_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(dura_rect, col=dura_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	dura_label := ctx.gs.debug_show_durability ? "Durability: ON" : "Durability: OFF"
+	dura_label := ctx.gs.debug_show_durability ? "Durab ON" : "Durab OFF"
 	dura_center := (dura_rect.xy + dura_rect.zw) * 0.5
-	draw_text(dura_center, dura_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text(dura_center, dura_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
-	grid_rect := shape.rect_make(debug_start + Vec2{0, -54}, debug_button_size, pivot=.center_center)
+	grid_rect := shape.rect_make(Vec2{right_x, row1_y}, debug_button_size, pivot=.center_center)
 	grid_hover, grid_pressed := raw_button(grid_rect)
 	if grid_pressed {
 		ctx.gs.debug_show_grid = !ctx.gs.debug_show_grid
@@ -1943,11 +1951,11 @@ draw_pause_menu_ui :: proc() {
 		grid_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(grid_rect, col=grid_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	grid_label := ctx.gs.debug_show_grid ? "Grid: ON" : "Grid: OFF"
+	grid_label := ctx.gs.debug_show_grid ? "Grid ON" : "Grid OFF"
 	grid_center := (grid_rect.xy + grid_rect.zw) * 0.5
-	draw_text(grid_center, grid_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text(grid_center, grid_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
-	growth_rect := shape.rect_make(debug_start + Vec2{0, -72}, debug_button_size, pivot=.center_center)
+	growth_rect := shape.rect_make(Vec2{left_x, row2_y}, debug_button_size, pivot=.center_center)
 	growth_hover, growth_pressed := raw_button(growth_rect)
 	if growth_pressed {
 		ctx.gs.debug_show_growth = !ctx.gs.debug_show_growth
@@ -1957,11 +1965,11 @@ draw_pause_menu_ui :: proc() {
 		growth_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(growth_rect, col=growth_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	growth_label := ctx.gs.debug_show_growth ? "Growth: ON" : "Growth: OFF"
+	growth_label := ctx.gs.debug_show_growth ? "Growth ON" : "Growth OFF"
 	growth_center := (growth_rect.xy + growth_rect.zw) * 0.5
-	draw_text(growth_center, growth_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text(growth_center, growth_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
-	perf_rect := shape.rect_make(debug_start + Vec2{0, -90}, debug_button_size, pivot=.center_center)
+	perf_rect := shape.rect_make(Vec2{right_x, row2_y}, debug_button_size, pivot=.center_center)
 	perf_hover, perf_pressed := raw_button(perf_rect)
 	if perf_pressed {
 		ctx.gs.debug_show_perf_stats = !ctx.gs.debug_show_perf_stats
@@ -1971,9 +1979,9 @@ draw_pause_menu_ui :: proc() {
 		perf_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(perf_rect, col=perf_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	perf_label := ctx.gs.debug_show_perf_stats ? "Perf Stats: ON" : "Perf Stats: OFF"
+	perf_label := ctx.gs.debug_show_perf_stats ? "Perf ON" : "Perf OFF"
 	perf_center := (perf_rect.xy + perf_rect.zw) * 0.5
-	draw_text(perf_center, perf_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text(perf_center, perf_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
 	player := get_player()
 	area_label := "Area: n/a"
@@ -1983,40 +1991,40 @@ draw_pause_menu_ui :: proc() {
 		player_area_x, player_area_y = world_area_for_world_pos(player.pos)
 		area_label = fmt.tprintf("Area: %v,%v", player_area_x, player_area_y)
 	}
-	draw_text(Vec2{cx, cy - 92}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
+	draw_text(Vec2{cx, row3_y - 8}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
-	unlock_here_rect := shape.rect_make(Vec2{cx, cy - 108}, Vec2{124, 16}, pivot=.center_center)
+	unlock_here_rect := shape.rect_make(Vec2{left_x, row3_y - 24}, debug_button_size, pivot=.center_center)
 	unlock_here_hover, unlock_here_pressed := raw_button(unlock_here_rect)
 	unlock_here_col := Vec4{0.05, 0.08, 0.05, 0.78}
 	if unlock_here_hover {
 		unlock_here_col = Vec4{0.16, 0.22, 0.16, 0.86}
 	}
 	draw_rect(unlock_here_rect, col=unlock_here_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((unlock_here_rect.xy+unlock_here_rect.zw)*0.5, "Unlock Here", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text((unlock_here_rect.xy+unlock_here_rect.zw)*0.5, "Unlock", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 	if unlock_here_pressed && player_valid {
 		_ = unlock_world_area(player_area_x, player_area_y)
 	}
 
-	unlock_adj_rect := shape.rect_make(Vec2{cx, cy - 126}, Vec2{124, 16}, pivot=.center_center)
+	unlock_adj_rect := shape.rect_make(Vec2{right_x, row3_y - 24}, debug_button_size, pivot=.center_center)
 	unlock_adj_hover, unlock_adj_pressed := raw_button(unlock_adj_rect)
 	unlock_adj_col := Vec4{0.05, 0.08, 0.05, 0.78}
 	if unlock_adj_hover {
 		unlock_adj_col = Vec4{0.16, 0.22, 0.16, 0.86}
 	}
 	draw_rect(unlock_adj_rect, col=unlock_adj_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((unlock_adj_rect.xy+unlock_adj_rect.zw)*0.5, "Unlock Adjacent", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+	draw_text((unlock_adj_rect.xy+unlock_adj_rect.zw)*0.5, "Unlock+Adj", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.38)
 	if unlock_adj_pressed && player_valid {
 		unlock_world_area_with_adjacent(player_area_x, player_area_y)
 	}
 
-	struct_maker_rect := shape.rect_make(Vec2{f32(GAME_RES_WIDTH) - 8, f32(GAME_RES_HEIGHT) - 8}, debug_button_size, pivot=.top_right)
+	struct_maker_rect := shape.rect_make(Vec2{left_x, row4_y - 24}, debug_button_size, pivot=.center_center)
 	struct_maker_hover, struct_maker_pressed := raw_button(struct_maker_rect)
 	struct_maker_col := Vec4{0.06, 0.08, 0.12, 0.8}
 	if struct_maker_hover {
 		struct_maker_col = Vec4{0.14, 0.18, 0.28, 0.88}
 	}
 	draw_rect(struct_maker_rect, col=struct_maker_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((struct_maker_rect.xy+struct_maker_rect.zw)*0.5, "Structure Maker", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.46)
+	draw_text((struct_maker_rect.xy+struct_maker_rect.zw)*0.5, "Structure", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
 	if struct_maker_pressed {
 		if len(terrain_structures) > 0 && (ctx.gs.structure_maker_selected_index < 0 || ctx.gs.structure_maker_selected_index >= len(terrain_structures)) {
 			ctx.gs.structure_maker_selected_index = 0
@@ -2025,14 +2033,14 @@ draw_pause_menu_ui :: proc() {
 		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, true)
 	}
 
-	recipe_maker_rect := shape.rect_make(Vec2{f32(GAME_RES_WIDTH) - 8, f32(GAME_RES_HEIGHT) - 28}, debug_button_size, pivot=.top_right)
+	recipe_maker_rect := shape.rect_make(Vec2{right_x, row4_y - 24}, debug_button_size, pivot=.center_center)
 	recipe_maker_hover, recipe_maker_pressed := raw_button(recipe_maker_rect)
 	recipe_maker_col := Vec4{0.08, 0.1, 0.08, 0.8}
 	if recipe_maker_hover {
 		recipe_maker_col = Vec4{0.16, 0.22, 0.16, 0.88}
 	}
 	draw_rect(recipe_maker_rect, col=recipe_maker_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((recipe_maker_rect.xy+recipe_maker_rect.zw)*0.5, "Recipe Maker", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.46)
+	draw_text((recipe_maker_rect.xy+recipe_maker_rect.zw)*0.5, "Recipes", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 	if recipe_maker_pressed {
 		if len(crafting_recipes) > 0 && (ctx.gs.recipe_maker_selected_index < 0 || ctx.gs.recipe_maker_selected_index >= len(crafting_recipes)) {
 			ctx.gs.recipe_maker_selected_index = 0
