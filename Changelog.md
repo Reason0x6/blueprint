@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [8276004] Make Recipe Maker slot clicks select non-selected slots first and only cycle items on the currently selected slot
 - Recipe Maker slot clicks now follow select-then-edit behavior: clicking a different input/output recipe slot only selects it, and item cycling only occurs when clicking the already-selected slot.
 
 ## [880afa5] Move Recipe Maker input and output slots upward by 30 percent of slot height for improved panel alignment
