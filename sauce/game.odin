@@ -2317,7 +2317,8 @@ draw_structure_maker_ui :: proc() {
 recipe_maker_input_slot_rect :: proc(panel: shape.Rect, i: int) -> shape.Rect {
 	cell := Vec2{34, 34}
 	gap: f32 = 4
-	grid_origin := Vec2{panel.x + 14, panel.w - 52}
+	shift_up := cell.y * 0.3
+	grid_origin := Vec2{panel.x + 14, panel.w - 52 + shift_up}
 	col := i % CRAFT_INPUT_COLS
 	row := i / CRAFT_INPUT_COLS
 	pos := grid_origin + Vec2{f32(col) * (cell.x + gap), f32(row) * -(cell.y + gap)}
@@ -2325,7 +2326,9 @@ recipe_maker_input_slot_rect :: proc(panel: shape.Rect, i: int) -> shape.Rect {
 }
 
 recipe_maker_output_slot_rect :: proc(panel: shape.Rect) -> shape.Rect {
-	return shape.rect_make(Vec2{panel.x + 142, panel.w - 90}, Vec2{34, 34}, pivot=.top_left)
+	cell := Vec2{34, 34}
+	shift_up := cell.y * 0.3
+	return shape.rect_make(Vec2{panel.x + 142, panel.w - 90 + shift_up}, cell, pivot=.top_left)
 }
 
 draw_recipe_maker_ui :: proc() {

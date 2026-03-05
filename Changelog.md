@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Shifted Recipe Maker input/output recipe slots upward by 30% of slot height to better align vertical spacing in the centered panel layout.
 
 ## [6a894a5] Center the Recipe Maker panel and reposition controls so slot boxes are unobstructed and the close button stays inside bounds
 - Re-centered the Recipe Maker modal on screen, moved count/help controls into a dedicated bottom strip so they no longer overlap the 2x3 crafting slots, and pulled the `Close` button inward so it stays fully inside the panel bounds.
