@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Added per-entity manual pivot offset support (`Entity.pivot_offset`) plus `set_entity_pivot_offset`, and applied it across default sprite draw, sprite-rect/overlap-rect generation, and depth-sort feet calculations so pivot shifts can be configured per entity without moving collision hitboxes.
 
 ## [987b3a9] Randomize chunk vegetation placement order with deterministic tile shuffling to remove column spawn artifacts
 - Fixed column-like tree/bush spawn patterns by replacing stride-based tile traversal with deterministic per-chunk shuffled tile ordering (Fisher-Yates), preserving target counts and collision checks while improving visual distribution randomness.

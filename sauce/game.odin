@@ -314,6 +314,7 @@ Entity :: struct {
 	last_known_x_dir: f32,
 	flip_x: bool,
 	draw_offset: Vec2,
+	pivot_offset: Vec2,
 	draw_pivot: utils.Pivot,
 	sort_scale_y: f32,
 	rotation: f32,
@@ -398,6 +399,10 @@ entity_setup :: proc(e: ^Entity, kind: Entity_Kind) {
 		case .dagger_projectile: setup_dagger_projectile(e)
 		case .movement_indicator_fx: setup_movement_indicator_fx(e)
 	}
+}
+
+set_entity_pivot_offset :: proc(e: ^Entity, offset: Vec2) {
+	e.pivot_offset = offset
 }
 
 //
@@ -3970,13 +3975,14 @@ draw_terrain_water_tile_sprite :: proc(sprite: Sprite_Name, tile_center: Vec2, t
 }
 
 get_entity_sort_y :: proc(e: Entity) -> f32 {
+	draw_pos := e.pos + e.pivot_offset
 	#partial switch e.kind {
 	case .player:
 		// Player feet anchor is entity position; use this directly for stable depth sorting.
-		return e.pos.y
+		return draw_pos.y
 	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
 		// Bush source sheets include large transparent bottom padding; visible base sits ~32px above anchor.
-		return e.pos.y + 32
+		return draw_pos.y + 32
 	}
 
 	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
@@ -3988,7 +3994,7 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 		}
 
 		scaled_size := Vec2{frame_width, size.y * scale_y}
-		min_y := (e.pos - scaled_size * utils.scale_from_pivot(e.draw_pivot) - e.draw_offset).y
+		min_y := (draw_pos - scaled_size * utils.scale_from_pivot(e.draw_pivot) - e.draw_offset).y
 		return min_y + sprite_sort_foot_y[e.sprite]*scale_y
 	}
 
@@ -4001,11 +4007,12 @@ get_entity_sort_y :: proc(e: Entity) -> f32 {
 }
 
 get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
+	draw_pos := e.pos + e.pivot_offset
 	#partial switch e.kind {
 	case .player:
-		return e.pos
+		return draw_pos
 	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
-		return e.pos + Vec2{0, 32}
+		return draw_pos + Vec2{0, 32}
 	}
 
 	if e.sprite != .nil && sprite_sort_foot_y_valid[e.sprite] {
@@ -4018,7 +4025,7 @@ get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
 
 		scaled_size := Vec2{frame_width, size.y * scale_y}
 		pivot_scale := utils.scale_from_pivot(e.draw_pivot)
-		min := e.pos - scaled_size * pivot_scale - e.draw_offset
+		min := draw_pos - scaled_size * pivot_scale - e.draw_offset
 		return Vec2{
 			min.x + frame_width * 0.5,
 			min.y + sprite_sort_foot_y[e.sprite] * scale_y,
@@ -4029,7 +4036,7 @@ get_entity_sort_feet_pos :: proc(e: Entity) -> Vec2 {
 	if ok {
 		return Vec2{(hitbox.x + hitbox.z) * 0.5, hitbox.y}
 	}
-	return e.pos
+	return draw_pos
 }
 
 get_entity_sort_screen_y :: proc(e: Entity) -> f32 {
@@ -4087,11 +4094,11 @@ get_entity_overlap_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #opti
 	if e.sprite == .nil {
 		return {}, false
 	}
-
+	draw_pos := e.pos + e.pivot_offset
 
 	data := sprite_data[e.sprite]
 	if data.overlap_box_size.x != 0 || data.overlap_box_size.y != 0 {
-		return shape.rect_make(e.pos + data.overlap_box_offset, data.overlap_box_size, pivot=data.overlap_box_pivot), true
+		return shape.rect_make(draw_pos + data.overlap_box_offset, data.overlap_box_size, pivot=data.overlap_box_pivot), true
 	}
 
 	return get_entity_sprite_rect(e)
@@ -4101,11 +4108,12 @@ get_entity_sprite_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 	if e.sprite == .nil {
 		return {}, false
 	}
+	draw_pos := e.pos + e.pivot_offset
 
 	size := get_sprite_size(e.sprite)
 	size.x /= f32(get_frame_count(e.sprite))
 
-	min := e.pos - size * utils.scale_from_pivot(e.draw_pivot) - e.draw_offset
+	min := draw_pos - size * utils.scale_from_pivot(e.draw_pivot) - e.draw_offset
 	max := min + size
 	return shape.Rect{min.x, min.y, max.x, max.y}, true
 }
@@ -4124,7 +4132,7 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 	case .tree_ent:
 		// Tree collider is only the trunk section so players can overlap canopy.
 		size := get_sprite_size(e.sprite)
-		center := e.pos + Vec2{0, 0}
+		center := e.pos + Vec2{0, 3}
 		return shape.rect_make(center, Vec2{50, 30}, pivot=.bottom_center), true
 	case .sprout_ent:
 		center := e.pos + Vec2{0, 0}
@@ -5898,6 +5906,7 @@ draw_entity_default :: proc(e: Entity) {
 	if e.sprite == nil {
 		return
 	}
+	draw_pos := e.pos + e.pivot_offset
 
 	xform := utils.xform_rotate(e.rotation)
 	entity_col := color.WHITE
@@ -5916,19 +5925,19 @@ draw_entity_default :: proc(e: Entity) {
 			outline_alpha = min(1.0, outline_alpha * LOW_DURABILITY_FLASH_ALPHA_MULT)
 		}
 		outline_col := Vec4{1, 1, 1, outline_alpha}
-		draw_sprite(e.pos + Vec2{1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-		draw_sprite(e.pos + Vec2{-1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-		draw_sprite(e.pos + Vec2{0, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-		draw_sprite(e.pos + Vec2{0, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(draw_pos + Vec2{1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(draw_pos + Vec2{-1, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(draw_pos + Vec2{0, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+		draw_sprite(draw_pos + Vec2{0, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		if e.durability > 0 && e.durability < LOW_DURABILITY_FLASH_THRESHOLD {
-			draw_sprite(e.pos + Vec2{2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{-2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{0, 2}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{0, -2}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{-1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
-			draw_sprite(e.pos + Vec2{-1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{-2, 0}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{0, 2}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{0, -2}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{-1, 1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
+			draw_sprite(draw_pos + Vec2{-1, -1}, e.sprite, pivot=e.draw_pivot, flip_x=draw_flip_x, draw_offset=e.draw_offset, xform=xform, anim_index=e.anim_index, col=outline_col, z_layer=.playspace)
 		}
 	}
 
@@ -5966,8 +5975,8 @@ draw_sprite_entity :: proc(
 		col_override.xyz = entity.hit_flash.xyz
 		col_override.a = max(col_override.a, entity.hit_flash.a)
 	}
-
-	draw_sprite(pos, sprite, pivot, flip_x, draw_offset, xform, anim_index, col, col_override, z_layer, flags, params, crop_top, crop_left, crop_bottom, crop_right)
+	draw_pos := pos + entity.pivot_offset
+	draw_sprite(draw_pos, sprite, pivot, flip_x, draw_offset, xform, anim_index, col, col_override, z_layer, flags, params, crop_top, crop_left, crop_bottom, crop_right)
 }
 
 //
