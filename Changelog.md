@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [1790fa4] Add a brief fade-out animation for broken entities before final despawn
 - Added short destroy fade-out for breakable entities: when an entity is broken, it now lingers for a brief alpha fade instead of disappearing instantly, while immediately disabling its gameplay blocking during the fade and removing it at fade completion.
 
 ## [ac5f257] Give bushes 3 durability and add a 33 percent fiber drop chance on bush break
