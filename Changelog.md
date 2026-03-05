@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Fixed Recipe Maker slot rendering to draw on the pause overlay layer (`.pause_menu`) so input/output boxes are no longer hidden behind the modal dimmer.
+- Adjusted Recipe Maker grid positioning to present a clear `2 columns x 3 rows -> 1 output` editor layout.
 
 ## [b70d8f5] Add an in-game Recipe Maker overlay for creating, editing, and saving shape-based crafting recipes
 - Added a new pause-menu `Recipe Maker` overlay (parallel to Structure Maker) for authoring shape-based crafting recipes in-game.

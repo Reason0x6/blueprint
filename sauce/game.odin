@@ -2317,7 +2317,7 @@ draw_structure_maker_ui :: proc() {
 recipe_maker_input_slot_rect :: proc(panel: shape.Rect, i: int) -> shape.Rect {
 	cell := Vec2{34, 34}
 	gap: f32 = 4
-	grid_origin := Vec2{panel.x + 14, panel.w - 62}
+	grid_origin := Vec2{panel.x + 14, panel.w - 52}
 	col := i % CRAFT_INPUT_COLS
 	row := i / CRAFT_INPUT_COLS
 	pos := grid_origin + Vec2{f32(col) * (cell.x + gap), f32(row) * -(cell.y + gap)}
@@ -2325,7 +2325,7 @@ recipe_maker_input_slot_rect :: proc(panel: shape.Rect, i: int) -> shape.Rect {
 }
 
 recipe_maker_output_slot_rect :: proc(panel: shape.Rect) -> shape.Rect {
-	return shape.rect_make(Vec2{panel.x + 142, panel.w - 102}, Vec2{34, 34}, pivot=.top_left)
+	return shape.rect_make(Vec2{panel.x + 142, panel.w - 90}, Vec2{34, 34}, pivot=.top_left)
 }
 
 draw_recipe_maker_ui :: proc() {
@@ -2359,7 +2359,7 @@ draw_recipe_maker_ui :: proc() {
 		rect := recipe_maker_input_slot_rect(panel, i)
 		hover := shape.rect_contains(rect, mouse)
 		selected := ctx.gs.recipe_maker_selected_slot == i
-		draw_inventory_slot(rect, ctx.gs.recipe_maker_pattern[i], selected=selected, hover=hover)
+		draw_inventory_slot_at_layer(rect, ctx.gs.recipe_maker_pattern[i], selected=selected, hover=hover, layer=.pause_menu)
 		if hover && key_pressed(.LEFT_MOUSE) {
 			consume_key_pressed(.LEFT_MOUSE)
 			ctx.gs.recipe_maker_selected_slot = i
@@ -2389,7 +2389,7 @@ draw_recipe_maker_ui :: proc() {
 	out_rect := recipe_maker_output_slot_rect(panel)
 	out_hover := shape.rect_contains(out_rect, mouse)
 	out_selected := ctx.gs.recipe_maker_selected_slot == -1
-	draw_inventory_slot(out_rect, ctx.gs.recipe_maker_output, selected=out_selected, hover=out_hover)
+	draw_inventory_slot_at_layer(out_rect, ctx.gs.recipe_maker_output, selected=out_selected, hover=out_hover, layer=.pause_menu)
 	draw_text(out_rect.xy + Vec2{-16, 12}, "=>", z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.75}, drop_shadow_col=Vec4{}, scale=0.5)
 	if out_hover && key_pressed(.LEFT_MOUSE) {
 		consume_key_pressed(.LEFT_MOUSE)
@@ -5273,7 +5273,7 @@ inventory_update :: proc() {
 	}
 }
 
-draw_inventory_slot :: proc(rect: shape.Rect, slot: Inventory_Slot, selected: bool, hover: bool, hotbar:=false) {
+draw_inventory_slot_at_layer :: proc(rect: shape.Rect, slot: Inventory_Slot, selected: bool, hover: bool, layer: ZLayer, hotbar:=false) {
 	fill := Vec4{0.05, 0.05, 0.05, 0.72}
 	if hover {
 		fill = Vec4{0.1, 0.1, 0.1, 0.82}
@@ -5287,7 +5287,7 @@ draw_inventory_slot :: proc(rect: shape.Rect, slot: Inventory_Slot, selected: bo
 		outline = Vec4{1, 0.9, 0.2, 0.95}
 	}
 
-	draw_rect(rect, col=fill, outline_col=outline, z_layer=.ui)
+	draw_rect(rect, col=fill, outline_col=outline, z_layer=layer)
 
 	if slot.item == .nil || slot.count <= 0 {
 		return
@@ -5295,13 +5295,17 @@ draw_inventory_slot :: proc(rect: shape.Rect, slot: Inventory_Slot, selected: bo
 
 	icon := item_icon_sprite(slot.item)
 	if icon != .nil {
-		draw_sprite_in_rect(icon, rect.xy, shape.rect_size(rect), col=Vec4{1, 1, 1, 0.9}, z_layer=.ui, pad_pct=0.2)
+		draw_sprite_in_rect(icon, rect.xy, shape.rect_size(rect), col=Vec4{1, 1, 1, 0.9}, z_layer=layer, pad_pct=0.2)
 	}
 
 	if slot.count > 1 {
 		count_text := fmt.tprintf("%v", slot.count)
-		draw_text(rect.zw + Vec2{-2, -1}, count_text, pivot=.top_right, z_layer=.ui, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.6})
+		draw_text(rect.zw + Vec2{-2, -1}, count_text, pivot=.top_right, z_layer=layer, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{0, 0, 0, 0.6})
 	}
+}
+
+draw_inventory_slot :: proc(rect: shape.Rect, slot: Inventory_Slot, selected: bool, hover: bool, hotbar:=false) {
+	draw_inventory_slot_at_layer(rect, slot, selected, hover, .ui, hotbar)
 }
 
 get_inventory_drop_world_pos :: proc(mouse_world_pos: Vec2) -> Vec2 {
