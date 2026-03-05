@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [c55866f] Strengthen right-click movement detours with generic waypoint search across full hitbox path checks
 - Improved right-click auto-move rerouting by adding a generic waypoint detour search that tests perpendicular offset candidates against full player-hitbox path checks, so movement can route around intervening terrain/water/entity hitboxes (not only nearby blockers).
 
 ## [5905be5] Make right-click movement route around blocking entities that lie between the player and destination
