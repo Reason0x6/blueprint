@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [ac5f257] Give bushes 3 durability and add a 33 percent fiber drop chance on bush break
 - Set all bush entities to durability `3` and added a `33%` chance to drop `fiber` when a bush is broken.
 
 ## [ad07ad2] Replace detour right-click movement with hold-to-move toward mouse and stop on release
