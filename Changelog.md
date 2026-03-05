@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [9085623] Shorten pause-menu button labels and rename unlock actions to compact clearer wording
 - Shortened pause-menu button copy for denser UI labels (e.g. `HBox/Ovlp/Dura/Grow`) and renamed unlock actions to clearer compact terms (`Unlock 1`, `Unlock 3x3`).
 
 ## [bf568ce] Reflow pause-menu controls into half-width two-column button rows
