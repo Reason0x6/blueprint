@@ -126,8 +126,9 @@ STRUCTURE_CHUNK_INNER_AREA_TILES :: 15
 VEG_SPAWN_RADIUS_CHUNKS :: 2
 GRASS_SPAWNS_PER_CHUNK :: 11
 GRASS_SPAWN_TRIES_PER_CHUNK :: 28
-TREE_SPAWNS_PER_CHUNK :: 3
-TREE_SPAWN_TRIES_PER_CHUNK :: 16
+TREE_SPAWNS_PER_CHUNK_MIN :: 5
+TREE_SPAWNS_PER_CHUNK_MAX :: 10
+TREE_SPAWN_TRIES_PER_CHUNK :: 80
 VEG_MIN_DIST_GRASS: f32 : 12
 VEG_MIN_DIST_TREE: f32 : 22
 
@@ -3258,10 +3259,17 @@ spawn_grass_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
 	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	target_spawn_count := TREE_SPAWNS_PER_CHUNK_MIN
+	if TREE_SPAWNS_PER_CHUNK_MAX > TREE_SPAWNS_PER_CHUNK_MIN {
+		span := TREE_SPAWNS_PER_CHUNK_MAX - TREE_SPAWNS_PER_CHUNK_MIN + 1
+		count_seed := u64(i64(chunk_x)*78162491 + i64(chunk_y)*1597334677)
+		r := random01_from_seed(count_seed ~ 0xA4093822299F31D0)
+		target_spawn_count = TREE_SPAWNS_PER_CHUNK_MIN + clamp(int(math.floor(r * f32(span))), 0, span-1)
+	}
 
 	spawned := 0
 	for i in 0..<TREE_SPAWN_TRIES_PER_CHUNK {
-		if spawned >= TREE_SPAWNS_PER_CHUNK do break
+		if spawned >= target_spawn_count do break
 
 		base_seed := u64(i64(chunk_x)*116129781 + i64(chunk_y)*961748927 + i64(i)*31337)
 		rx := random01_from_seed(base_seed ~ 0x9E3779B9)
@@ -3271,6 +3279,8 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 		tile_x := int(math.floor(pos.x / tile_size.x))
 		tile_y := int(math.floor(pos.y / tile_size.y))
 		if !is_terrain_solid_tile(tile_x, tile_y) do continue
+		tree_hitbox := shape.rect_make(pos, Vec2{50, 30}, pivot=.bottom_center)
+		if is_spawn_hitbox_overlapping(tree_hitbox) do continue
 
 		if try_spawn_world_entity(.tree_ent, pos, VEG_MIN_DIST_TREE) {
 			spawned += 1
