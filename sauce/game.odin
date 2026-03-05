@@ -119,6 +119,7 @@ PLACE_PREVIEW_RANGE: f32 : INTERACT_RANGE * 2
 ENTITY_GRID_SIZE: f32 : 32
 HITBOX_CORNER_CUT: f32 : 9
 TREE_WOOD_HIT_DROP_CHANCE: f32 : 0.15
+BUSH_BREAK_FIBER_DROP_CHANCE: f32 : 0.33
 DURABILITY_REGEN_DELAY_SEC: f64 : 0.5
 DURABILITY_REGEN_PER_SEC: f32 : 2.0
 SPROUT_GROWTH_BASE_SEC: f64 : 60.0
@@ -5756,6 +5757,15 @@ should_roll_bonus_sapling_drop :: proc(kind: Entity_Kind) -> bool {
 	}
 }
 
+is_bush_kind :: proc(kind: Entity_Kind) -> bool {
+	#partial switch kind {
+	case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+		return true
+	case:
+		return false
+	}
+}
+
 get_place_approach_pos :: proc(player_pos: Vec2, place_pos: Vec2) -> Vec2 {
 	to_player := player_pos - place_pos
 	len_sq := to_player.x*to_player.x + to_player.y*to_player.y
@@ -6020,6 +6030,9 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	}
 	if should_roll_bonus_sapling_drop(target.kind) && roll_chance(0.5, u64(target.handle.id)+u64(ctx.gs.ticks)*733) {
 		spawn_item_pickup_towards_player(.sprout, 1, compute_hit_drop_spawn_pos(target))
+	}
+	if is_bush_kind(target.kind) && roll_chance(BUSH_BREAK_FIBER_DROP_CHANCE, u64(target.handle.id)*1597+u64(ctx.gs.ticks)*911) {
+		spawn_item_pickup_towards_player(.fiber, 1, compute_hit_drop_spawn_pos(target))
 	}
 	entity_destroy(target)
 }
@@ -7036,7 +7049,7 @@ setup_bush_ent_common :: proc(e: ^Entity, sprite: Sprite_Name) {
 	e.draw_pivot = .bottom_center
 	e.blocks_player = false
 	e.hide_when_behind = false
-	set_entity_durability(e, 0)
+	set_entity_durability(e, 3)
 	clear_entity_break_drops(e)
 	e.on_hit_proc = entity_on_hit_noop
 	e.loop = true

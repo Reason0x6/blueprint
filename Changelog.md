@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Set all bush entities to durability `3` and added a `33%` chance to drop `fiber` when a bush is broken.
 
 ## [ad07ad2] Replace detour right-click movement with hold-to-move toward mouse and stop on release
 - Removed detour-based right-click movement pathing and switched to hold-to-move behavior: while right mouse is held (and no UI overlay is open), the player continuously moves toward current mouse world position; releasing right mouse immediately cancels auto-move.
