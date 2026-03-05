@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Added per-structure transparent underlay mode (`water` or `block11`): Structure Maker now has an `Underlay` toggle, save/overwrite persists this in structure headers (`name{underlay=block11}`), and terrain rendering now uses the selected underlay behind non-water structure tiles.
 - Synced all remaining pending workspace changes into one commit, including current `res/data/terrain_structures.txt` edits.
 - Moved Structure Maker existing-structure controls (`<`, `>`, `Load`, `Overwrite`) and selection/status labels to the panel bottom area so they remain visible/clickable and are no longer obscured by the tile grid.
 - Fixed a Structure Maker/edit-existing crash (`memory could not be read`) by cloning parsed terrain structure names into persistent allocator memory (`context.allocator`) instead of storing temporary string slices from file parse buffers.

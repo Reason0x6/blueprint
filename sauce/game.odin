@@ -66,6 +66,7 @@ Game_State :: struct {
 	structure_maker_paint_active: bool,
 	structure_maker_paint_token: int,
 	structure_maker_paint_flip_x: bool,
+	structure_maker_underlay_mode: Terrain_Underlay_Mode,
 	structure_maker_selected_index: int,
 	structure_maker_next_id: int,
 	structure_maker_last_saved_id: int,
@@ -208,8 +209,14 @@ Terrain_Tile :: struct {
 	water_flip_x: bool,
 }
 
+Terrain_Underlay_Mode :: enum u8 {
+	water,
+	block11,
+}
+
 Terrain_Structure :: struct {
 	name: string,
+	underlay_mode: Terrain_Underlay_Mode,
 	rows: int,
 	cols: int,
 	tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]Terrain_Tile,
@@ -916,6 +923,54 @@ compact_no_ws :: proc(s: string) -> string {
 	return string(out[:])
 }
 
+format_structure_name_with_underlay :: proc(name: string, mode: Terrain_Underlay_Mode) -> string {
+	if mode == .block11 {
+		return fmt.tprintf("%v{underlay=block11}", name)
+	}
+	return name
+}
+
+parse_structure_name_and_underlay :: proc(raw_name: string) -> (name: string, mode: Terrain_Underlay_Mode) {
+	mode = .water
+	name = trim_ascii_ws(raw_name)
+	if len(name) == 0 {
+		return
+	}
+
+	open := strings.index(name, "{")
+	close := strings.index(name, "}")
+	if open < 0 || close < 0 || close <= open {
+		return
+	}
+
+	base := trim_ascii_ws(name[:open])
+	opts := trim_ascii_ws(name[open+1:close])
+	if len(base) > 0 {
+		name = base
+	}
+	if len(opts) == 0 {
+		return
+	}
+
+	parts := strings.split(opts, ",")
+	for p in parts {
+		part := trim_ascii_ws(p)
+		if len(part) == 0 do continue
+		eq := strings.index(part, "=")
+		if eq < 0 do continue
+		k := trim_ascii_ws(part[:eq])
+		v := trim_ascii_ws(part[eq+1:])
+		if k == "underlay" {
+			if v == "block11" {
+				mode = .block11
+			} else {
+				mode = .water
+			}
+		}
+	}
+	return
+}
+
 parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 	t := trim_ascii_ws(tok)
 	if len(t) == 0 {
@@ -983,7 +1038,7 @@ parse_terrain_structure_expr :: proc(name: string, expr_raw: string) -> bool {
 		return false
 	}
 
-	st := Terrain_Structure{name=name}
+	st := Terrain_Structure{name=name, underlay_mode=.water}
 	st.name = strings.clone(name, allocator=context.allocator)
 	st.rows = len(row_strs)
 
@@ -1047,7 +1102,8 @@ load_terrain_structures :: proc() {
 			continue
 		}
 
-		name := trim_ascii_ws(line[:eq])
+		name_raw := trim_ascii_ws(line[:eq])
+		name, underlay_mode := parse_structure_name_and_underlay(name_raw)
 		expr := trim_ascii_ws(line[eq+1:])
 		expr_buf := make([dynamic]u8, 0, len(expr)+64, allocator=context.temp_allocator)
 		append(&expr_buf, expr)
@@ -1068,7 +1124,9 @@ load_terrain_structures :: proc() {
 			continue
 		}
 
-		_ = parse_terrain_structure_expr(name, string(expr_buf[:]))
+		if parse_terrain_structure_expr(name, string(expr_buf[:])) {
+			terrain_structures[len(terrain_structures)-1].underlay_mode = underlay_mode
+		}
 	}
 
 	if len(terrain_structures) == 0 {
@@ -1191,7 +1249,8 @@ write_all_terrain_structures_to_file :: proc() -> bool {
 			continue
 		}
 		expr := build_structure_expr_from_data(st)
-		line := fmt.tprintf("%v = %v\n", st.name, expr)
+		header := format_structure_name_with_underlay(st.name, st.underlay_mode)
+		line := fmt.tprintf("%v = %v\n", header, expr)
 		append(&buf, line)
 	}
 
@@ -1222,6 +1281,7 @@ load_structure_into_maker :: proc(index: int) -> bool {
 	ctx.gs.structure_maker_rows = rows
 	ctx.gs.structure_maker_cols = cols
 	ctx.gs.structure_maker_selected_index = index
+	ctx.gs.structure_maker_underlay_mode = st.underlay_mode
 
 	for r in 0..<rows {
 		for c in 0..<cols {
@@ -1245,6 +1305,7 @@ overwrite_structure_from_maker :: proc(index: int) -> bool {
 	st := &terrain_structures[index]
 	st.cols = cols
 	st.rows = rows
+	st.underlay_mode = ctx.gs.structure_maker_underlay_mode
 
 	for r in 0..<MAX_TERRAIN_STRUCTURE_ROWS {
 		for c in 0..<MAX_TERRAIN_STRUCTURE_COLS {
@@ -1284,7 +1345,8 @@ save_structure_from_maker :: proc() -> bool {
 	}
 	ctx.gs.structure_maker_next_id = save_id + 1
 
-	line := fmt.tprintf("%v = %v\n", name, expr)
+	header := format_structure_name_with_underlay(name, ctx.gs.structure_maker_underlay_mode)
+	line := fmt.tprintf("%v = %v\n", header, expr)
 	path := "res/data/terrain_structures.txt"
 	existing, read_err := os.read_entire_file_from_path(path, context.temp_allocator)
 
@@ -1315,6 +1377,7 @@ save_structure_from_maker :: proc() -> bool {
 		ctx.gs.structure_maker_last_save_ok = false
 		return false
 	}
+	terrain_structures[len(terrain_structures)-1].underlay_mode = ctx.gs.structure_maker_underlay_mode
 
 	ctx.gs.structure_maker_selected_index = len(terrain_structures) - 1
 	ctx.gs.structure_maker_last_saved_id = save_id
@@ -1725,6 +1788,7 @@ draw_structure_maker_ui :: proc() {
 	row_plus := shape.rect_make(Vec2{panel.x + 186, row_y}, btn_size, pivot=.top_left)
 	save_rect := shape.rect_make(Vec2{panel.x + 214, row_y}, Vec2{46, 12}, pivot=.top_left)
 	clear_rect := shape.rect_make(Vec2{panel.x + 264, row_y}, Vec2{46, 12}, pivot=.top_left)
+	underlay_rect := shape.rect_make(Vec2{panel.x + 314, row_y}, Vec2{98, 12}, pivot=.top_left)
 	selector_y := panel.y + 34
 	prev_struct_rect := shape.rect_make(Vec2{panel.x + 8, selector_y}, Vec2{18, 12}, pivot=.bottom_left)
 	next_struct_rect := shape.rect_make(Vec2{panel.x + 30, selector_y}, Vec2{18, 12}, pivot=.bottom_left)
@@ -1749,6 +1813,13 @@ draw_structure_maker_ui :: proc() {
 	if draw_structure_maker_button(save_rect, "Save") {
 		_ = save_structure_from_maker()
 	}
+	underlay_label := "Underlay: Water"
+	if ctx.gs.structure_maker_underlay_mode == .block11 {
+		underlay_label = "Underlay: Block11"
+	}
+	if draw_structure_maker_button(underlay_rect, underlay_label) {
+		ctx.gs.structure_maker_underlay_mode = .block11 if ctx.gs.structure_maker_underlay_mode == .water else .water
+	}
 	if draw_structure_maker_button(prev_struct_rect, "<") && len(terrain_structures) > 0 {
 		ctx.gs.structure_maker_selected_index -= 1
 		if ctx.gs.structure_maker_selected_index < 0 {
@@ -1771,7 +1842,11 @@ draw_structure_maker_ui :: proc() {
 	selected_label := "Selected: none"
 	if len(terrain_structures) > 0 && ctx.gs.structure_maker_selected_index >= 0 && ctx.gs.structure_maker_selected_index < len(terrain_structures) {
 		st := terrain_structures[ctx.gs.structure_maker_selected_index]
-		selected_label = fmt.tprintf("Selected: %v (%v x %v)", st.name, st.cols, st.rows)
+		bg := "water"
+		if st.underlay_mode == .block11 {
+			bg = "block11"
+		}
+		selected_label = fmt.tprintf("Selected: %v (%v x %v, bg=%v)", st.name, st.cols, st.rows, bg)
 	}
 	draw_text(Vec2{panel.x + 160, selector_y + 11}, selected_label, pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.88, 0.93, 1.0, 0.86}, drop_shadow_col=Vec4{}, scale=0.34)
 
@@ -1915,6 +1990,7 @@ game_update :: proc() {
 		ctx.gs.structure_maker_rows = 6
 		ctx.gs.structure_maker_next_id = len(terrain_structures) + 1
 		ctx.gs.structure_maker_selected_index = 0 if len(terrain_structures) > 0 else -1
+		ctx.gs.structure_maker_underlay_mode = .water
 		ctx.gs.structure_maker_last_save_attempted = false
 		ctx.gs.structure_maker_last_save_ok = true
 		reset_structure_maker_tiles()
@@ -2651,7 +2727,8 @@ spawn_terrain_structure :: proc(name: string, world_pos: Vec2) -> bool {
 	return spawn_terrain_structure_at_tile(name, origin_tile_x, origin_tile_y)
 }
 
-terrain_tile_for_tile :: proc(tile_x: int, tile_y: int) -> Terrain_Tile {
+terrain_tile_with_underlay_for_tile :: proc(tile_x: int, tile_y: int) -> (tile: Terrain_Tile, underlay_mode: Terrain_Underlay_Mode) {
+	underlay_mode = .water
 	// Later-spawned structures take priority where they overlap.
 	for i := len(ctx.gs.terrain_structure_instances) - 1; i >= 0; i -= 1 {
 		inst := ctx.gs.terrain_structure_instances[i]
@@ -2671,9 +2748,14 @@ terrain_tile_for_tile :: proc(tile_x: int, tile_y: int) -> Terrain_Tile {
 			continue
 		}
 
-		return st.tiles[rel_y][rel_x]
+		return st.tiles[rel_y][rel_x], st.underlay_mode
 	}
-	return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}
+	return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}, .water
+}
+
+terrain_tile_for_tile :: proc(tile_x: int, tile_y: int) -> Terrain_Tile {
+	tile, _ := terrain_tile_with_underlay_for_tile(tile_x, tile_y)
+	return tile
 }
 
 terrain_block_index_for_tile :: proc(tile_x: int, tile_y: int) -> int {
@@ -3361,19 +3443,27 @@ draw_world_terrain_tiles :: proc() {
 				continue
 			}
 
-			tile := terrain_tile_for_tile(tx, ty)
+			tile, underlay_mode := terrain_tile_with_underlay_for_tile(tx, ty)
 			tile_center := Vec2{(f32(tx) + 0.5) * tile_size.x, (f32(ty) + 0.5) * tile_size.y}
 			tile_rect := shape.rect_make(tile_center, tile_size, pivot=.center_center)
 			water_sprite := water_sprite_for_variant(tile.water_variant)
 			if !sprite_is_loaded(water_sprite) {
 				water_sprite = water_sprite_for_variant(1)
 			}
-			// Water underlay for non-water tiles so transparent pixels reveal water below.
+			// Per-structure underlay for non-water tiles so transparent pixels reveal desired background.
 			if tile.kind != .water {
-				if sprite_is_loaded(water_sprite) {
-					draw_terrain_water_tile_sprite(water_sprite, tile_center, tile_size, tile.water_flip_x)
+				if underlay_mode == .block11 {
+					if sprite_is_loaded(.tilemap_color1) {
+						draw_tileset_block_in_world_rect(.tilemap_color1, 11, tile_rect, col=Vec4{1, 1, 1, 0.95})
+					} else {
+						draw_rect(tile_rect, col=Vec4{0.55, 0.72, 0.32, 1.0})
+					}
 				} else {
-					draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
+					if sprite_is_loaded(water_sprite) {
+						draw_terrain_water_tile_sprite(water_sprite, tile_center, tile_size, tile.water_flip_x)
+					} else {
+						draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
+					}
 				}
 			} else {
 				draw_rect(tile_rect, col=Vec4{0.18, 0.35, 0.72, 1.0})
