@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Shortened pause-menu button copy for denser UI labels (e.g. `HBox/Ovlp/Dura/Grow`) and renamed unlock actions to clearer compact terms (`Unlock 1`, `Unlock 3x3`).
 
 ## [bf568ce] Reflow pause-menu controls into half-width two-column button rows
 - Reflowed pause-menu controls into two columns of half-width buttons per row (debug toggles, unlock actions, and editor launch buttons) for a denser, grid-aligned layout.

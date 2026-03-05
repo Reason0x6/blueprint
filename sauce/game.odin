@@ -1909,7 +1909,7 @@ draw_pause_menu_ui :: proc() {
 		hitboxes_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(hitboxes_rect, col=hitboxes_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	hitboxes_label := ctx.gs.debug_show_hitboxes ? "Hitbox ON" : "Hitbox OFF"
+	hitboxes_label := ctx.gs.debug_show_hitboxes ? "HBox ON" : "HBox OFF"
 	hitboxes_center := (hitboxes_rect.xy + hitboxes_rect.zw) * 0.5
 	draw_text(hitboxes_center, hitboxes_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
@@ -1923,7 +1923,7 @@ draw_pause_menu_ui :: proc() {
 		overlap_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(overlap_rect, col=overlap_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	overlap_label := ctx.gs.debug_show_overlap_boxes ? "Overlap ON" : "Overlap OFF"
+	overlap_label := ctx.gs.debug_show_overlap_boxes ? "Ovlp ON" : "Ovlp OFF"
 	overlap_center := (overlap_rect.xy + overlap_rect.zw) * 0.5
 	draw_text(overlap_center, overlap_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
@@ -1937,7 +1937,7 @@ draw_pause_menu_ui :: proc() {
 		dura_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(dura_rect, col=dura_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	dura_label := ctx.gs.debug_show_durability ? "Durab ON" : "Durab OFF"
+	dura_label := ctx.gs.debug_show_durability ? "Dura ON" : "Dura OFF"
 	dura_center := (dura_rect.xy + dura_rect.zw) * 0.5
 	draw_text(dura_center, dura_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
@@ -1965,7 +1965,7 @@ draw_pause_menu_ui :: proc() {
 		growth_col = Vec4{0.2, 0.2, 0.2, 0.85}
 	}
 	draw_rect(growth_rect, col=growth_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	growth_label := ctx.gs.debug_show_growth ? "Growth ON" : "Growth OFF"
+	growth_label := ctx.gs.debug_show_growth ? "Grow ON" : "Grow OFF"
 	growth_center := (growth_rect.xy + growth_rect.zw) * 0.5
 	draw_text(growth_center, growth_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 
@@ -2000,7 +2000,7 @@ draw_pause_menu_ui :: proc() {
 		unlock_here_col = Vec4{0.16, 0.22, 0.16, 0.86}
 	}
 	draw_rect(unlock_here_rect, col=unlock_here_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((unlock_here_rect.xy+unlock_here_rect.zw)*0.5, "Unlock", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
+	draw_text((unlock_here_rect.xy+unlock_here_rect.zw)*0.5, "Unlock 1", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
 	if unlock_here_pressed && player_valid {
 		_ = unlock_world_area(player_area_x, player_area_y)
 	}
@@ -2012,7 +2012,7 @@ draw_pause_menu_ui :: proc() {
 		unlock_adj_col = Vec4{0.16, 0.22, 0.16, 0.86}
 	}
 	draw_rect(unlock_adj_rect, col=unlock_adj_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((unlock_adj_rect.xy+unlock_adj_rect.zw)*0.5, "Unlock+Adj", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.38)
+	draw_text((unlock_adj_rect.xy+unlock_adj_rect.zw)*0.5, "Unlock 3x3", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.35)
 	if unlock_adj_pressed && player_valid {
 		unlock_world_area_with_adjacent(player_area_x, player_area_y)
 	}
@@ -2024,7 +2024,7 @@ draw_pause_menu_ui :: proc() {
 		struct_maker_col = Vec4{0.14, 0.18, 0.28, 0.88}
 	}
 	draw_rect(struct_maker_rect, col=struct_maker_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
-	draw_text((struct_maker_rect.xy+struct_maker_rect.zw)*0.5, "Structure", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
+	draw_text((struct_maker_rect.xy+struct_maker_rect.zw)*0.5, "Struct", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.42)
 	if struct_maker_pressed {
 		if len(terrain_structures) > 0 && (ctx.gs.structure_maker_selected_index < 0 || ctx.gs.structure_maker_selected_index >= len(terrain_structures)) {
 			ctx.gs.structure_maker_selected_index = 0
