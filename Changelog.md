@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [987b3a9] Randomize chunk vegetation placement order with deterministic tile shuffling to remove column spawn artifacts
 - Fixed column-like tree/bush spawn patterns by replacing stride-based tile traversal with deterministic per-chunk shuffled tile ordering (Fisher-Yates), preserving target counts and collision checks while improving visual distribution randomness.
 
 ## [a59e040] Fix depth-order key direction so above entities render behind and below entities render in front again
