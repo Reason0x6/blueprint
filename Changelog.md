@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [5905be5] Make right-click movement route around blocking entities that lie between the player and destination
 - Right-click movement now detects blocking entities that intersect the straight path segment to the destination, selects a side detour waypoint around the blocker, and then continues to the original destination when both path legs are clear.
 
 ## [9085623] Shorten pause-menu button labels and rename unlock actions to compact clearer wording
