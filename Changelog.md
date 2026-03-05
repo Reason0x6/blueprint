@@ -1,11 +1,15 @@
 # Changelog
 
 ## [HEAD] Unreleased
-- Synced pending workspace updates before recipe-editor work, including current `res/data/terrain_structures.txt` edits and related `game.odin` adjustments.
+
+## [b70d8f5] Add an in-game Recipe Maker overlay for creating, editing, and saving shape-based crafting recipes
 - Added a new pause-menu `Recipe Maker` overlay (parallel to Structure Maker) for authoring shape-based crafting recipes in-game.
 - Recipe Maker supports input-slot item cycling (2x3 grid), output-slot item selection, per-slot/output count adjustment, loading existing recipes, overwriting selected recipes, saving new recipes, and clearing the editor state.
 - Added recipe file serialization back to `res/data/crafting_recipes.txt` from in-memory recipes, with immediate runtime recipe list updates used by the crafting system.
 - Added `UI_OVERLAY_RECIPE_MAKER` pause behavior wiring so gameplay remains paused while the recipe editor is open.
+
+## [6f34416] Sync pending workspace changes before implementing the crafting recipe maker UI
+- Synced pending workspace updates before recipe-editor work, including current `res/data/terrain_structures.txt` edits and related `game.odin` adjustments.
 
 ## [6d5a9c7] Add per-entity manual pivot offsets and apply them to render/overlap/depth calculations
 - Added per-entity manual pivot offset support (`Entity.pivot_offset`) plus `set_entity_pivot_offset`, and applied it across default sprite draw, sprite-rect/overlap-rect generation, and depth-sort feet calculations so pivot shifts can be configured per entity without moving collision hitboxes.
