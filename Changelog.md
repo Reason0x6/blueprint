@@ -2,92 +2,101 @@
 
 ## [HEAD] Unreleased
 
+## [7ed96b9] Move the bush spawn changelog entry under its commit SHA section
+- Moved the bush-spawn changelog note from HEAD into a commit-hashed section.
+
 ## [c424b23] Spawn 20-35 bushes per unlocked chunk after structures with hitbox-safe placement checks
-- Chunk generation now also spawns a deterministic random `20..35` bushes per unlocked chunk after structure placement, with spawn positions rejected if the bush hitbox would overlap any terrain/water/entity hitbox.
+- Chunk generation now also spawns a deterministic random 20..35 bushes per unlocked chunk after structure placement, with spawn positions rejected if the bush hitbox would overlap any terrain/water/entity hitbox.
+
+## [ba5232b] Assign the latest changelog section to its commit SHA and keep HEAD as unreleased
+- Reassigned the latest feature notes into a commit-hashed section and reset HEAD to unreleased state.
 
 ## [a14bfbc] Spawn 5-10 trees per unlocked chunk after structures while rejecting hitbox-overlapping placements
-- Chunk generation now spawns a deterministic random `5..10` trees per unlocked chunk (after structure placement), and tree spawn positions now reject any overlap with existing hitboxes (terrain/water/entity) before creating the entity.
-- Reworked structure transparent-background control to per-cell backing data using a second saved matrix (`[[tiles]]||[[backing]]`), with Structure Maker `Layer: FG/Backing` editing so each position can independently choose water (`0`) or block11 (`11`) behind transparent structure tiles.
-- Kept backward compatibility for older per-structure underlay headers (`name{underlay=block11}`) by using them as defaults when a structure entry has no explicit per-cell backing matrix.
-- Synced all remaining pending workspace changes into one commit, including current `res/data/terrain_structures.txt` edits.
-- Moved Structure Maker existing-structure controls (`<`, `>`, `Load`, `Overwrite`) and selection/status labels to the panel bottom area so they remain visible/clickable and are no longer obscured by the tile grid.
-- Fixed a Structure Maker/edit-existing crash (`memory could not be read`) by cloning parsed terrain structure names into persistent allocator memory (`context.allocator`) instead of storing temporary string slices from file parse buffers.
-- Changed Structure Maker overlay flow to run as its own paused screen (pause menu hidden while maker is open, and restored on close), preventing simultaneous pause-menu + maker button processing during editor interaction.
-- Hardened Structure Maker UI runtime path by replacing the nested per-frame local button proc with a top-level helper (`draw_structure_maker_button`), avoiding local-proc runtime edge cases when opening/clicking the editor.
-- Fixed Structure Maker open crash path by keeping pause active when opening the editor and treating `UI_OVERLAY_STRUCTURE_MAKER` as a paused state in `is_game_paused`, so gameplay update paths do not run under the editor overlay.
-- Structure Maker now supports editing existing structures: select loaded structure (`<`/`>`), `Load` it into the grid, and `Overwrite` to write the updated tiles back to the same structure name in `res/data/terrain_structures.txt`.
-- Structure Maker water token cycling now includes mirrored `a` variants (`-3a`, `-2a`, `-1a`, `0a`) in both forward and backward cycles, and save/export now writes those suffixed tokens to `terrain_structures.txt`.
-- Added Structure Maker middle-mouse paint tool: middle-click picks the hovered tile token, then holding middle mouse and dragging paints hovered tiles with that same token.
-- Structure Maker grid now supports right-click backward cycling per tile token (`... -> -3 <- max <- ...`), while left-click continues forward cycling.
-- Fixed Structure Maker block preview rendering by drawing tileset block quads on the pause-menu layer (`.pause_menu`) instead of default layer, so block textures are visible in the editor grid.
-- Structure Maker now displays tile textures only (removed numeric token text), increased editor tile size for clearer visual editing, and moved the `Structure Maker` launch button to the top-right of the pause overlay.
-- Structure Maker tile buttons now render edge-to-edge with no 1px spacing, so tile previews are contiguous with no visual margin/padding between cells.
-- Added an in-game `Structure Maker` overlay (from the pause menu) with editable `A x B` dimensions, clickable tile editing that cycles `-3 .. 0 .. TERRAIN_MAX_BLOCK_INDEX`, and one-click save that appends `maker_### = [[...]]` entries to `res/data/terrain_structures.txt` while hot-loading the new structure at runtime.
-- Synced all currently pending workspace updates into one commit, including latest tree/sapling/sprout image/meta asset edits and in-progress `game.odin` gameplay code changes.
-- Overlap debug visuals (blue) now also use strict edge-line rendering (4 border quads), matching entity hitboxes and guaranteeing outline-only display without interior fill.
-- Entity hitbox debug visuals (red) now use strict edge-line rendering (4 border quads) instead of `draw_rect` outline mode, ensuring they are always outline-only with no interior fill.
-- Water collision debug overlays now render as outline-only boxes (no fill), matching the hitbox/overlap outline style.
-- Reverted the temporary bush sort-foot switch to hitbox-bottom and restored bush depth/debug feet to the visual-base offset path (`e.pos + Vec2{0, 32}`).
-- When `Hitboxes` debug is enabled, the game now also draws a small white dot per entity at its computed depth-sort feet position (`get_entity_sort_feet_pos`) so sprite-foot ordering can be visually verified in-world.
-- Depth ordering now sorts entities by feet in screen-space Y (top to bottom), and behind-fade checks now use the same screen-space comparison; this makes front/behind behavior match visual position on screen (lower feet render in front, higher feet render behind).
-- Player draw-order sorting now uses player feet anchor (`player.pos.y`) directly instead of sprite-foot metadata, fixing cases where player was always rendered in front of bushes due to draw-offset/meta foot mismatch.
-- Bush draw-order sorting now uses bush anchor feet (`e.pos.y`) instead of opaque-pixel foot metadata, because bush sheets include large transparent bottom padding that otherwise delayed front/back flips; player now moves behind/in-front right when crossing bush base.
-- Fixed sprite-foot depth sorting orientation by converting meta `sort_foot_y` from top-origin image coordinates to in-game bottom-origin coordinates, and restored fallback feet sorting to `hitbox.y` (not `hitbox.w`) so bushes/player front-back ordering now follows feet position correctly.
-- Draw-order sorting now uses sprite meta `sort_foot_y` (opaque-foot pixel) when available, with per-entity `sort_scale_y` support so downscaled sprites (like bushes at `0.5`) sort correctly against the player near their visual base.
-- Added a build-time sprite meta validator (`asset_workbench/ensure_sprite_meta_opaque.ps1`) that scans `res/images/*.png` and appends missing `opaque_bounds`, `sort_foot_x`, and `sort_foot_y` fields to matching `.meta` files; `build.bat` now runs this check before compiling.
-- Split entity collision and behind-fade behavior into separate flags by adding `hide_when_behind`, so overlap-based transparency can be enabled without requiring `blocks_player`; bushes now use fade-on-behind while remaining non-blocking.
-- Player movement now checks full player-hitbox occupancy before applying WASD or click-to-move steps, so structure water collision blocks movement immediately instead of only reverting after overlap.
-- Added shared player auto-move cancel handling when movement is blocked by water/entity hitboxes.
-- Added configurable terrain block hitboxes by block index via `setup_terrain_block_hitboxes`/`set_terrain_block_hitbox`, with block `11` explicitly non-blocking.
-- Wired terrain block hitbox collision into both point checks and full player-hitbox movement checks, and added debug rendering for configured terrain block collision boxes when hitbox debug is enabled.
-- Added configurable water collision oversize (`WATER_COLLISION_OVERSIZE_PX`) and updated water blocking checks to test neighboring water tiles so expanded water hitboxes work correctly across tile edges.
-- Fixed terrain block hitbox queries to include neighboring tiles for both point and rect checks, so offset/oversized hitboxes are respected consistently for structure tiles too.
-- Hitbox debug rendering (entity, water, terrain-block outlines) now draws on the pause-menu layer while paused, so toggling hitboxes in the pause menu shows them immediately above the gray overlay.
-- Water debug hitboxes now visualize the actual per-pixel `water.png` collision mask (with oversize margin) instead of a full-tile blue outline, so structure-water debug matches real collision shape.
-- Grid debug is now OFF by default at startup (still toggleable from the pause menu).
-- Fixed hitbox-toggle crashes by replacing per-pixel-per-tile water debug fills with lightweight per-tile mask-bounds debug rectangles.
-- Fixed water collision mask dimension loading to use the actual decoded `water.png` width/height (removed erroneous `+14` sizing), keeping collision sampling and debug bounds in sync.
-- Terrain block collision now supports multiple hitboxes per block index via `add_terrain_block_hitbox`, while `set_terrain_block_hitbox` remains as a clear-and-set helper for single-box cases.
-- Updated terrain block point, rect, and debug collision paths to evaluate/draw all configured hitboxes for the block tile instead of only one.
-- Synced all currently pending workspace changes (code, terrain data, and image/tileset asset updates) into a single commit.
-- Terrain structure tokens now support water variants: `water_1..water_4`, with numeric aliases `0 -> water_1`, `-1 -> water_2`, `-2 -> water_3`, `-3 -> water_4`.
-- Water terrain rendering now selects per-tile variant sprites, and water collision/debug mask logic now reads per-variant masks (`water_1.png..water_4.png`) with fallback to variant 1/legacy `water.png`.
-- Fixed startup crash caused by missing legacy `res/images/water.png` after moving to variant water textures by restoring `water.png` as a compatibility fallback (copied from `water_1.png`).
-- Added mirrored water token support by suffixing `a` (e.g. `0a`, `-1a`, `-2a`, `-3a`, and `water_1a..water_4a`) to render water tiles flipped left-right.
-- Water collision sampling now mirrors the per-variant water mask when a water tile uses the `a` suffix, so collision stays consistent with flipped visuals.
-- Slightly zoomed out the world camera by reducing `get_camera_zoom` scale to `95%` of the previous value.
-- Left-clicking hotbar slots while the inventory panel is closed now equips the slot without picking up/dropping the stack.
-- Closing the inventory overlay now returns held stack and all crafting input items back into inventory (overflow drops near player only if inventory is full), instead of dropping held items on close.
-- Holding right-click while dragging a stack now supports slot-by-slot paint placement: moving over new inventory/crafting slots places one item into each newly hovered slot.
-- Synced all currently pending workspace files in one commit, including water variant image/meta asset updates, removed obsolete water/oblisk metas, and related utility/workbench file changes.
-- Added unlockable world areas using `16x16` tile regions: player now starts with only the current area unlocked, and movement/targeting is blocked in locked regions.
-- Locked regions now render as dark tiles, while unlocked regions render normal terrain/collision.
-- Added pause-menu debug controls for area progression: `Unlock Here` (current area) and `Unlock Adjacent` (3x3 around current area), plus current area coordinate display.
-- Added deterministic per-chunk terrain structure spawning: each visited chunk now selects one random loaded structure and places it at a random origin constrained to fit within a centered `15x15` inner area.
-- Removed the previous hardcoded startup `island_1` structure spawn so chunk-based random structure placement drives terrain structure distribution.
-- Added an on-screen FPS counter in the top-left HUD.
-- Improved early-game performance by gating chunk vegetation/structure spawning to chunks that overlap unlocked world areas, avoiding heavy entity generation in still-locked regions.
-- Added unlocked-world camera clamping with an edge margin so the camera scrolls within unlocked bounds and only lets the player roam freely once movement reaches near the visible unlocked-area edge.
-- Refined unlocked-world camera behavior so vertical follow now continues until unlocked bounds actually reach the screen edge (no vertical margin clamp).
-- Fixed camera freeze by basing unlocked-world clamp view extents on game resolution (`GAME_RES_WIDTH/HEIGHT`) instead of window-size-derived extents.
-- Fixed world-area indexing to use direct `16x16` tile buckets (no half-tile offset), so adjacent unlocks correctly reveal chunk-inner structure spawns.
-- Added a manual-spawn world offset helper so manual spawn coordinates are bucket-centered: `Vec2{0,0}` now maps to the center of a `16x16` unlock-area bucket for startup entities/items and `spawn_terrain_structure(world_pos)`.
-- Fixed camera clamp bounds to match direct-bucket unlocked-area coordinates, correcting the camera offset introduced after manual-spawn/bucket alignment changes.
-- Updated per-chunk random structure placement to choose its `15x15` inner spawn zone from unlocked-overlapping chunk regions, so structures can spawn into currently revealable space instead of being hidden entirely in locked tiles.
-- Player startup spawn now resolves to the nearest non-overlapping position around the intended center, avoiding terrain/entity hitbox overlap while staying as close to bucket middle as possible.
-- `manual_spawn_world_pos` now validates collision overlap and searches outward to the nearest clear grid position before returning, so manual spawns auto-shift until they no longer overlap hitboxes.
-- Strengthened manual/player startup spawning to use full hitbox-overlap checks (terrain + entity hitboxes) via `manual_spawn_world_pos_for_hitbox`, and applied explicit hitbox sizes for startup entity placements.
-- Fixed startup spawn resolution edge case where locked-area checks blocked all candidates before the first area unlock by treating lock checks as inactive until at least one world area is unlocked.
-- Chunk structure spawning now rejects placements that overlap the player hitbox and retries deterministic candidate placements, preventing startup/player trapping when structures generate near spawn.
-- Added timed plant growth with per-entity randomness: sprouts grow into saplings at ~60s (`+/-` jitter), and saplings grow into trees at ~120s (`+/-` jitter).
-- Growth now retries after a short delay if the next growth stage would overlap the player hitbox, preventing forced player trapping during transformation.
-- Added a pause-menu debug toggle (`Growth: ON/OFF`) to show growth countdown overlays for sprouts/saplings, including seconds remaining until next stage.
-- Fixed placeable preview alignment by matching preview pivot to placed entity pivot (saplings now preview with `bottom_center`), so placement lands where preview indicates.
-- Added four animated bush entities (`bush_1_ent`..`bush_4_ent`) sourced from `Bushes_Bush 1..4` assets, each configured as 8-frame looping world entities.
-- Added engine-friendly bush sprite asset copies (`bushes_bush_1..4.png/.meta`) and render-time downscaling to `64x64` in-world via `0.5` draw scale from their `128x128` source frames.
-- Fixed startup crash (`failed to pack all the rects, ran out of space?`) by increasing texture atlas packing size from `1024` to `2048` in `core_render.odin`.
-- Added explicit bush entity hitboxes (`30x18`, bottom-centered) for `bush_1_ent..bush_4_ent`, while keeping per-bush overlap boxes from sprite data so both collision and overlap debugging are defined per bush type.
-- Bush draw path now applies the same overlap-based fade logic (`is_player_behind_entity`) as default entities, so bush overlap boxes affect behind/in-front transparency behavior as expected.
+- Chunk generation now spawns a deterministic random 5..10 trees per unlocked chunk (after structure placement), and tree spawn positions now reject any overlap with existing hitboxes (terrain/water/entity) before creating the entity.
+
+## [b3636dc] Add per-cell structure backing matrix editing so each tile can choose water or block11 underlay
+- Reworked structure transparent-background control to per-cell backing data using a second saved matrix ([[tiles]]||[[backing]]), with Structure Maker Layer: FG/Backing editing so each position can independently choose water (0) or block11 (11) behind transparent structure tiles.
+
+## [3671a82] Add per-structure underlay selection so transparent structure blocks can render over water or block11
+- Added per-structure underlay defaults and backward compatibility for header-driven underlay where no per-cell backing matrix is present.
+
+## [b439b76] Sync all pending workspace updates including terrain_structures data changes
+- Synced all remaining pending workspace changes into one commit, including current res/data/terrain_structures.txt edits.
+
+## [8719075] Move Structure Maker existing-structure controls below the grid so they stay visible and clickable
+- Moved Structure Maker existing-structure controls (<, >, Load, Overwrite) and selection/status labels below the tile grid so they remain visible and clickable.
+
+## [da4ca0d] Fix Structure Maker crash by persisting parsed terrain structure names instead of temp-buffer slices
+- Fixed a Structure Maker/edit-existing crash (memory could not be read) by cloning parsed terrain structure names into persistent allocator memory (context.allocator).
+
+## [cb40b8f] Run Structure Maker as a standalone paused overlay and restore pause menu on close
+- Changed Structure Maker overlay flow to run as its own paused screen (pause menu hidden while maker is open, and restored on close).
+
+## [7b80e72] Harden Structure Maker UI button handling with a top-level helper to reduce open/click crash risk
+- Hardened Structure Maker UI runtime path by replacing nested per-frame local button helpers with a top-level button helper.
+
+## [7ae361c] Add existing-structure load/overwrite in Structure Maker and keep the editor in paused overlay state
+- Added existing-structure editing controls and paused-state handling for Structure Maker open/interaction.
+
+## [f885fda] Add mirrored water token variants and middle-mouse paint support to the Structure Maker grid
+- Added mirrored a water variants in tile cycling/save output and added middle-mouse paint pick/drag support in Structure Maker.
+
+## [243cc1e] Update Structure Maker visuals to texture-only larger tiles and move its pause button to the top-right
+- Switched Structure Maker grid visuals to larger texture-only tiles and moved the Structure Maker pause-menu button to the top-right.
+
+## [0bc0c08] Render Structure Maker tiles edge-to-edge with no spacing between tile buttons
+- Structure Maker tile cells now render edge-to-edge with no padding between tile buttons.
+
+## [dcd4cd8] Add a pause-menu Structure Maker overlay for cycling tile tokens and saving A x B structures to terrain_structures.txt
+- Added the pause-menu Structure Maker overlay with A x B sizing, tile token cycling, and save-to-terrain_structures.txt flow.
+
+## [a530844] Sync all pending workspace changes including current gameplay code and sprite/meta asset updates
+- Synced pending gameplay code and sprite/meta asset updates in one commit.
+
+## [71c30cd] Render blue overlap debug boxes with explicit border lines for outline-only display
+- Overlap debug visuals now render as explicit outline borders only.
+
+## [0485d34] Render red entity hitboxes with explicit border lines so they are always outline-only
+- Entity hitbox debug visuals now render as explicit outline borders only.
+
+## [202ed8c] Render water hitbox debug overlays as outlines only without interior fill
+- Water collision debug overlays now render as outline-only boxes.
+
+## [c0e4358] Revert bush hitbox-bottom sort-foot test and restore visual-base offset feet markers
+- Reverted temporary bush sort-foot hitbox-bottom behavior and restored visual-base feet markers.
+
+## [3092d76] Add debug sort-foot dots so computed entity depth points are visible in-world
+- Added debug white dots showing computed entity sort-foot points.
+
+## [6e3b714] Use screen-space feet ordering for draw sort and behind checks to match visual front/back behavior
+- Depth sorting and behind checks now use consistent screen-space feet ordering.
+
+## [ea21bf7] Fix player bush depth ordering by sorting the player from feet anchor instead of sprite metadata
+- Player draw order now uses player feet anchor (player.pos.y) for bush depth interactions.
+
+## [c8b86bd] Fix bush front/back ordering by sorting bushes from their anchor feet instead of padded sprite foot metadata
+- Bush draw ordering now sorts from bush anchor feet to avoid padded-sprite misordering.
+
+## [e36768f] Fix feet-based depth ordering by correcting sort foot Y origin and hitbox fallback key
+- Corrected sort-foot Y origin conversion and fallback feet sorting behavior.
+
+## [37a06c6] Use sprite opaque-foot metadata for depth sorting so bushes render in correct order near the player
+- Draw-order sorting now uses sprite opaque-foot metadata when available.
+
+## [aca7176] Add build-time sprite meta validation that backfills opaque bounds and sort foot fields
+- Added build-time sprite meta validator to ensure opaque bounds/sort-foot fields exist.
+
+## [77c429f] Split entity behind-fade from collision blocking with a new hide_when_behind flag
+- Split overlap-fade behavior from blocking collision with hide_when_behind.
+
+## [1f626dc] Fix bush overlap fade behavior and align bush overlap and collision boxes with their visual base
+- Fixed bush overlap fade behavior and aligned bush overlap/collision boxes with their visual base.
+
+## [71f17b1] Define explicit bush hitboxes per bush entity and finalize the atlas-size startup-crash fix
+- Added explicit bush hitboxes and finalized startup atlas sizing stability changes.
+
+## [241f69f] Add four animated bush entities and scale their 128px frames to 64px for world rendering
+- Added four animated bush entity variants and downscaled them to 64px world rendering.
 
 ## [bdfe590] Fix water collision sampling step type to f32 so the game builds successfully
 - Fixed Odin type mismatch in water collision hitbox sampling by making the loop `step` explicitly `f32`, resolving build errors at `x += step` / `y += step`.
@@ -360,3 +369,5 @@
 
 ## [22a3ac5] Changes galore
 - Legacy commit heading backfilled with short hash to match the new changelog heading format.
+
+
