@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [c0cb923] Play the movement target indicator on initial right-click press while keeping hold-to-move updates
 - Restored movement target indicator playback on initial right-click press while preserving hold-to-move behavior during right mouse hold.
 
 ## [1790fa4] Add a brief fade-out animation for broken entities before final despawn
