@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [880afa5] Move Recipe Maker input and output slots upward by 30 percent of slot height for improved panel alignment
 - Shifted Recipe Maker input/output recipe slots upward by 30% of slot height to better align vertical spacing in the centered panel layout.
 
 ## [6a894a5] Center the Recipe Maker panel and reposition controls so slot boxes are unobstructed and the close button stays inside bounds
