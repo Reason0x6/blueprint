@@ -2597,30 +2597,29 @@ game_update :: proc() {
 	inventory_update()
 	try_throw_equipped_dagger()
 
-	if key_pressed(.RIGHT_MOUSE) && !is_any_ui_overlay_open() {
-		consume_key_pressed(.RIGHT_MOUSE)
-
+	if !is_any_ui_overlay_open() && key_down(.RIGHT_MOUSE) {
 		player := get_player()
 		if is_valid(player^) {
 			target := mouse_pos_in_current_space()
-
-			clicked_entity, clicked_entity_ok := find_entity_at_world_pos(target)
-			if clicked_entity_ok {
-				set_player_move_target_with_detour(player, clicked_entity.pos)
-				player.pending_interact = clicked_entity.handle
-				player.has_pending_interact = true
-				player.has_pending_place = false
-				player.pending_place_item = .nil
-				spawn_movement_indicator(target)
-			} else if !is_world_position_blocked_for_player(target) {
-				set_player_move_target_with_detour(player, target)
+			if !is_world_position_blocked_for_player(target) {
+				player.move_target = target
+				player.has_move_target = true
+				player.queued_move_target = {}
+				player.has_queued_move_target = false
 				player.has_pending_interact = false
 				player.pending_interact = {}
 				player.has_pending_place = false
 				player.pending_place_item = .nil
-				spawn_movement_indicator(target)
 			}
- 		}
+		}
+	}
+	if key_released(.RIGHT_MOUSE) {
+		player := get_player()
+		if is_valid(player^) {
+			player.has_move_target = false
+			player.has_queued_move_target = false
+			player.queued_move_target = {}
+		}
 	}
 
 	if key_pressed(.LEFT_MOUSE) && !is_any_ui_overlay_open() {
@@ -6395,46 +6394,6 @@ find_path_detour_waypoint :: proc(player: ^Entity, from: Vec2, target: Vec2) -> 
 set_player_move_target_with_detour :: proc(player: ^Entity, target: Vec2) {
 	player.queued_move_target = {}
 	player.has_queued_move_target = false
-
-	if is_player_path_clear(player, player.pos, target) {
-		player.move_target = target
-		player.has_move_target = true
-		return
-	}
-
-	generic_detour, generic_ok := find_path_detour_waypoint(player, player.pos, target)
-	if generic_ok {
-		player.move_target = generic_detour
-		player.has_move_target = true
-		player.queued_move_target = target
-		player.has_queued_move_target = true
-		return
-	}
-
-	blocker, on_path := find_blocker_on_path(player, player.pos, target)
-	if on_path {
-		detour, ok := compute_path_detour_around_hitbox(player, player.pos, target, blocker)
-		if ok {
-			player.move_target = detour
-			player.has_move_target = true
-			player.queued_move_target = target
-			player.has_queued_move_target = true
-			return
-		}
-	}
-
-	near_blocker_rect, near_blocker := get_nearby_blocker_hitbox(player.pos, 10)
-	if near_blocker {
-		detour := compute_detour_around_hitbox(player.pos, target, near_blocker_rect)
-		if !is_world_position_blocked_for_player(detour) {
-			player.move_target = detour
-			player.has_move_target = true
-			player.queued_move_target = target
-			player.has_queued_move_target = true
-			return
-		}
-	}
-
 	player.move_target = target
 	player.has_move_target = true
 }

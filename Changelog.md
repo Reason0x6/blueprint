@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Removed detour-based right-click movement pathing and switched to hold-to-move behavior: while right mouse is held (and no UI overlay is open), the player continuously moves toward current mouse world position; releasing right mouse immediately cancels auto-move.
 
 ## [c55866f] Strengthen right-click movement detours with generic waypoint search across full hitbox path checks
 - Improved right-click auto-move rerouting by adding a generic waypoint detour search that tests perpendicular offset candidates against full player-hitbox path checks, so movement can route around intervening terrain/water/entity hitboxes (not only nearby blockers).
