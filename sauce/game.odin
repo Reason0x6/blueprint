@@ -75,6 +75,12 @@ Game_State :: struct {
 	structure_maker_last_saved_id: int,
 	structure_maker_last_save_ok: bool,
 	structure_maker_last_save_attempted: bool,
+	recipe_maker_pattern: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot,
+	recipe_maker_output: Inventory_Slot,
+	recipe_maker_selected_index: int,
+	recipe_maker_selected_slot: int, // 0..5 input slot, -1 output slot
+	recipe_maker_last_save_ok: bool,
+	recipe_maker_last_save_attempted: bool,
 	hold_hit_target: Entity_Handle,
 	has_hold_hit_target: bool,
 	hit_cooldown_end_time: f64,
@@ -150,6 +156,7 @@ DRAW_ENTITY_CULL_MARGIN: f32 : 128
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
 UI_OVERLAY_STRUCTURE_MAKER : u32 : 1 << 2
+UI_OVERLAY_RECIPE_MAKER : u32 : 1 << 3
 
 Item_Kind :: enum u8 {
 	nil,
@@ -213,6 +220,19 @@ Crafting_Recipe :: struct {
 }
 
 crafting_recipes: [dynamic]Crafting_Recipe
+EDITABLE_RECIPE_ITEMS :: [11]Item_Kind{
+	.wood,
+	.stone,
+	.fiber,
+	.stick,
+	.rope,
+	.sprout,
+	.stone_blade,
+	.stone_multitool,
+	.oblisk_fragment,
+	.oblisk_core,
+	.dagger_item,
+}
 
 Terrain_Tile_Kind :: enum u8 {
 	empty,
@@ -935,6 +955,190 @@ load_crafting_recipes :: proc() {
 	}
 }
 
+cycle_recipe_item_kind :: proc(curr: Item_Kind, step: int, allow_nil: bool) -> Item_Kind {
+	items := EDITABLE_RECIPE_ITEMS
+	dir := 1
+	if step < 0 {
+		dir = -1
+	}
+
+	if allow_nil && curr == .nil {
+		if dir > 0 {
+			return items[0]
+		}
+		return items[len(items)-1]
+	}
+
+	idx := -1
+	for i in 0..<len(items) {
+		if items[i] == curr {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return items[0]
+	}
+	idx += dir
+	if idx >= len(items) {
+		return .nil if allow_nil else items[0]
+	}
+	if idx < 0 {
+		return .nil if allow_nil else items[len(items)-1]
+	}
+	return items[idx]
+}
+
+item_kind_token :: proc(item: Item_Kind) -> string {
+	#partial switch item {
+	case .wood: return "wood"
+	case .stone: return "stone"
+	case .fiber: return "fiber"
+	case .stick: return "stick"
+	case .rope: return "rope"
+	case .sprout: return "sprout"
+	case .stone_blade: return "stone_blade"
+	case .stone_multitool: return "stone_multitool"
+	case .oblisk_fragment: return "oblisk_fragment"
+	case .oblisk_core: return "oblisk_core"
+	case .dagger_item: return "dagger_item"
+	case:
+		return ""
+	}
+}
+
+format_recipe_slot_token :: proc(slot: Inventory_Slot) -> string {
+	if slot.item == .nil || slot.count <= 0 {
+		return "_"
+	}
+	tok := item_kind_token(slot.item)
+	if len(tok) == 0 {
+		return "_"
+	}
+	if slot.count == 1 {
+		return tok
+	}
+	return fmt.tprintf("%v:%v", tok, slot.count)
+}
+
+build_recipe_line :: proc(pattern: [CRAFT_INPUT_SLOT_COUNT]Inventory_Slot, output: Inventory_Slot) -> string {
+	buf := make([dynamic]u8, 0, 192, allocator=context.temp_allocator)
+	for r in 0..<CRAFT_INPUT_ROWS {
+		if r > 0 {
+			append(&buf, " | ")
+		}
+		for c in 0..<CRAFT_INPUT_COLS {
+			if c > 0 {
+				append(&buf, ',' )
+			}
+			slot_i := r*CRAFT_INPUT_COLS + c
+			tok := format_recipe_slot_token(pattern[slot_i])
+			append(&buf, tok)
+		}
+	}
+	append(&buf, " -> ")
+	append(&buf, format_recipe_slot_token(output))
+	return string(buf[:])
+}
+
+write_all_crafting_recipes_to_file :: proc() -> bool {
+	path := "res/data/crafting_recipes.txt"
+	buf := make([dynamic]u8, 0, 2048, allocator=context.temp_allocator)
+	append(&buf, "# Crafting recipes written by Recipe Maker\n")
+	append(&buf, "# Format: r0c0,r0c1 | r1c0,r1c1 | r2c0,r2c1 -> output_item:count\n\n")
+	for i in 0..<len(crafting_recipes) {
+		r := crafting_recipes[i]
+		output := Inventory_Slot{item=r.output.item, count=r.output.count}
+		line := build_recipe_line(r.pattern, output)
+		append(&buf, line)
+		append(&buf, '\n')
+	}
+	f, open_err := os.open(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	if open_err != nil {
+		log.warnf("recipe maker failed to open %q for write: %v", path, open_err)
+		return false
+	}
+	defer os.close(f)
+	_, write_err := os.write(f, buf[:])
+	if write_err != nil {
+		log.warnf("recipe maker failed to write %q: %v", path, write_err)
+		return false
+	}
+	return true
+}
+
+recipe_maker_clear :: proc() {
+	ctx.gs.recipe_maker_pattern = {}
+	ctx.gs.recipe_maker_output = {}
+	ctx.gs.recipe_maker_selected_slot = 0
+}
+
+recipe_maker_load_index :: proc(index: int) -> bool {
+	if index < 0 || index >= len(crafting_recipes) {
+		return false
+	}
+	r := crafting_recipes[index]
+	ctx.gs.recipe_maker_pattern = r.pattern
+	ctx.gs.recipe_maker_output = {item=r.output.item, count=max(1, r.output.count)}
+	ctx.gs.recipe_maker_selected_index = index
+	ctx.gs.recipe_maker_selected_slot = 0
+	return true
+}
+
+recipe_maker_has_valid_data :: proc() -> bool {
+	if ctx.gs.recipe_maker_output.item == .nil || ctx.gs.recipe_maker_output.count <= 0 {
+		return false
+	}
+	for slot in ctx.gs.recipe_maker_pattern {
+		if slot.item != .nil && slot.count > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+recipe_maker_save_new :: proc() -> bool {
+	if !recipe_maker_has_valid_data() {
+		ctx.gs.recipe_maker_last_save_attempted = true
+		ctx.gs.recipe_maker_last_save_ok = false
+		return false
+	}
+	append(&crafting_recipes, Crafting_Recipe{
+		pattern = ctx.gs.recipe_maker_pattern,
+		output = {item=ctx.gs.recipe_maker_output.item, count=ctx.gs.recipe_maker_output.count},
+	})
+	if !write_all_crafting_recipes_to_file() {
+		ctx.gs.recipe_maker_last_save_attempted = true
+		ctx.gs.recipe_maker_last_save_ok = false
+		return false
+	}
+	ctx.gs.recipe_maker_selected_index = len(crafting_recipes) - 1
+	ctx.gs.recipe_maker_last_save_attempted = true
+	ctx.gs.recipe_maker_last_save_ok = true
+	return true
+}
+
+recipe_maker_overwrite_selected :: proc() -> bool {
+	i := ctx.gs.recipe_maker_selected_index
+	if i < 0 || i >= len(crafting_recipes) || !recipe_maker_has_valid_data() {
+		ctx.gs.recipe_maker_last_save_attempted = true
+		ctx.gs.recipe_maker_last_save_ok = false
+		return false
+	}
+	crafting_recipes[i] = Crafting_Recipe{
+		pattern = ctx.gs.recipe_maker_pattern,
+		output = {item=ctx.gs.recipe_maker_output.item, count=ctx.gs.recipe_maker_output.count},
+	}
+	if !write_all_crafting_recipes_to_file() {
+		ctx.gs.recipe_maker_last_save_attempted = true
+		ctx.gs.recipe_maker_last_save_ok = false
+		return false
+	}
+	ctx.gs.recipe_maker_last_save_attempted = true
+	ctx.gs.recipe_maker_last_save_ok = true
+	return true
+}
+
 compact_no_ws :: proc(s: string) -> string {
 	out := make([dynamic]u8, 0, len(s), allocator=context.temp_allocator)
 	for i in 0..<len(s) {
@@ -1643,6 +1847,7 @@ app_frame :: proc() {
 		draw_inventory_ui()
 		draw_pause_menu_ui()
 		draw_structure_maker_ui()
+		draw_recipe_maker_ui()
 	}
 
 	sound_play_continuously("event:/ambiance", "")
@@ -1818,6 +2023,23 @@ draw_pause_menu_ui :: proc() {
 		}
 		set_ui_overlay_open(UI_OVERLAY_PAUSE, false)
 		set_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER, true)
+	}
+
+	recipe_maker_rect := shape.rect_make(Vec2{f32(GAME_RES_WIDTH) - 8, f32(GAME_RES_HEIGHT) - 28}, debug_button_size, pivot=.top_right)
+	recipe_maker_hover, recipe_maker_pressed := raw_button(recipe_maker_rect)
+	recipe_maker_col := Vec4{0.08, 0.1, 0.08, 0.8}
+	if recipe_maker_hover {
+		recipe_maker_col = Vec4{0.16, 0.22, 0.16, 0.88}
+	}
+	draw_rect(recipe_maker_rect, col=recipe_maker_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	draw_text((recipe_maker_rect.xy+recipe_maker_rect.zw)*0.5, "Recipe Maker", pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.46)
+	if recipe_maker_pressed {
+		if len(crafting_recipes) > 0 && (ctx.gs.recipe_maker_selected_index < 0 || ctx.gs.recipe_maker_selected_index >= len(crafting_recipes)) {
+			ctx.gs.recipe_maker_selected_index = 0
+			_ = recipe_maker_load_index(0)
+		}
+		set_ui_overlay_open(UI_OVERLAY_PAUSE, false)
+		set_ui_overlay_open(UI_OVERLAY_RECIPE_MAKER, true)
 	}
 }
 
@@ -2092,6 +2314,171 @@ draw_structure_maker_ui :: proc() {
 	}
 }
 
+recipe_maker_input_slot_rect :: proc(panel: shape.Rect, i: int) -> shape.Rect {
+	cell := Vec2{34, 34}
+	gap: f32 = 4
+	grid_origin := Vec2{panel.x + 14, panel.w - 62}
+	col := i % CRAFT_INPUT_COLS
+	row := i / CRAFT_INPUT_COLS
+	pos := grid_origin + Vec2{f32(col) * (cell.x + gap), f32(row) * -(cell.y + gap)}
+	return shape.rect_make(pos, cell, pivot=.top_left)
+}
+
+recipe_maker_output_slot_rect :: proc(panel: shape.Rect) -> shape.Rect {
+	return shape.rect_make(Vec2{panel.x + 142, panel.w - 102}, Vec2{34, 34}, pivot=.top_left)
+}
+
+draw_recipe_maker_ui :: proc() {
+	if !is_ui_overlay_open(UI_OVERLAY_RECIPE_MAKER) {
+		return
+	}
+
+	sx, sy := screen_pivot(.center_center)
+	screen_rect := shape.rect_make(Vec2{sx, sy}, Vec2{f32(GAME_RES_WIDTH), f32(GAME_RES_HEIGHT)}, pivot=.center_center)
+	draw_rect(screen_rect, col=Vec4{0.08, 0.08, 0.08, 0.55}, z_layer=.pause_menu)
+
+	panel := shape.rect_make(Vec2{f32(GAME_RES_WIDTH)-8, f32(GAME_RES_HEIGHT)-8}, Vec2{228, 202}, pivot=.top_right)
+	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.94}, outline_col=Vec4{1, 1, 1, 0.28}, z_layer=.pause_menu)
+	draw_text(Vec2{panel.x + 8, panel.w - 8}, "Recipe Maker", pivot=.top_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{}, scale=0.6)
+
+	close_rect := shape.rect_make(Vec2{panel.z - 18, panel.w - 10}, Vec2{22, 12}, pivot=.top_left)
+	if draw_structure_maker_button(close_rect, "Close") {
+		set_ui_overlay_open(UI_OVERLAY_RECIPE_MAKER, false)
+		set_ui_overlay_open(UI_OVERLAY_PAUSE, true)
+		return
+	}
+
+	if len(crafting_recipes) > 0 {
+		ctx.gs.recipe_maker_selected_index = clamp(ctx.gs.recipe_maker_selected_index, 0, len(crafting_recipes)-1)
+	} else {
+		ctx.gs.recipe_maker_selected_index = -1
+	}
+
+	mouse := mouse_pos_in_current_space()
+	for i in 0..<CRAFT_INPUT_SLOT_COUNT {
+		rect := recipe_maker_input_slot_rect(panel, i)
+		hover := shape.rect_contains(rect, mouse)
+		selected := ctx.gs.recipe_maker_selected_slot == i
+		draw_inventory_slot(rect, ctx.gs.recipe_maker_pattern[i], selected=selected, hover=hover)
+		if hover && key_pressed(.LEFT_MOUSE) {
+			consume_key_pressed(.LEFT_MOUSE)
+			ctx.gs.recipe_maker_selected_slot = i
+			slot := &ctx.gs.recipe_maker_pattern[i]
+			next := cycle_recipe_item_kind(slot.item, +1, true)
+			if next == .nil {
+				slot^ = {}
+			} else {
+				slot.item = next
+				slot.count = max(1, slot.count)
+			}
+		}
+		if hover && key_pressed(.RIGHT_MOUSE) {
+			consume_key_pressed(.RIGHT_MOUSE)
+			ctx.gs.recipe_maker_selected_slot = i
+			slot := &ctx.gs.recipe_maker_pattern[i]
+			prev := cycle_recipe_item_kind(slot.item, -1, true)
+			if prev == .nil {
+				slot^ = {}
+			} else {
+				slot.item = prev
+				slot.count = max(1, slot.count)
+			}
+		}
+	}
+
+	out_rect := recipe_maker_output_slot_rect(panel)
+	out_hover := shape.rect_contains(out_rect, mouse)
+	out_selected := ctx.gs.recipe_maker_selected_slot == -1
+	draw_inventory_slot(out_rect, ctx.gs.recipe_maker_output, selected=out_selected, hover=out_hover)
+	draw_text(out_rect.xy + Vec2{-16, 12}, "=>", z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.75}, drop_shadow_col=Vec4{}, scale=0.5)
+	if out_hover && key_pressed(.LEFT_MOUSE) {
+		consume_key_pressed(.LEFT_MOUSE)
+		ctx.gs.recipe_maker_selected_slot = -1
+		next := cycle_recipe_item_kind(ctx.gs.recipe_maker_output.item, +1, false)
+		ctx.gs.recipe_maker_output.item = next
+		ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
+	}
+	if out_hover && key_pressed(.RIGHT_MOUSE) {
+		consume_key_pressed(.RIGHT_MOUSE)
+		ctx.gs.recipe_maker_selected_slot = -1
+		prev := cycle_recipe_item_kind(ctx.gs.recipe_maker_output.item, -1, false)
+		ctx.gs.recipe_maker_output.item = prev
+		ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
+	}
+
+	draw_text(Vec2{panel.x + 12, panel.y + 56}, "L/R click slot: cycle item", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.8, 0.86, 0.95, 0.85}, drop_shadow_col=Vec4{}, scale=0.4)
+	draw_text(Vec2{panel.x + 12, panel.y + 46}, "Count:", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.44)
+
+	count_minus := shape.rect_make(Vec2{panel.x + 52, panel.y + 40}, Vec2{16, 12}, pivot=.bottom_left)
+	count_plus := shape.rect_make(Vec2{panel.x + 72, panel.y + 40}, Vec2{16, 12}, pivot=.bottom_left)
+	if draw_structure_maker_button(count_minus, "-") {
+		if ctx.gs.recipe_maker_selected_slot == -1 {
+			ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count-1)
+		} else if ctx.gs.recipe_maker_selected_slot >= 0 && ctx.gs.recipe_maker_selected_slot < CRAFT_INPUT_SLOT_COUNT {
+			slot := &ctx.gs.recipe_maker_pattern[ctx.gs.recipe_maker_selected_slot]
+			if slot.item != .nil {
+				slot.count = max(1, slot.count-1)
+			}
+		}
+	}
+	if draw_structure_maker_button(count_plus, "+") {
+		if ctx.gs.recipe_maker_selected_slot == -1 {
+			ctx.gs.recipe_maker_output.count = min(99, max(1, ctx.gs.recipe_maker_output.count+1))
+		} else if ctx.gs.recipe_maker_selected_slot >= 0 && ctx.gs.recipe_maker_selected_slot < CRAFT_INPUT_SLOT_COUNT {
+			slot := &ctx.gs.recipe_maker_pattern[ctx.gs.recipe_maker_selected_slot]
+			if slot.item != .nil {
+				slot.count = min(99, max(1, slot.count+1))
+			}
+		}
+	}
+
+	selected_count := 0
+	if ctx.gs.recipe_maker_selected_slot == -1 {
+		selected_count = ctx.gs.recipe_maker_output.count
+	} else if ctx.gs.recipe_maker_selected_slot >= 0 && ctx.gs.recipe_maker_selected_slot < CRAFT_INPUT_SLOT_COUNT {
+		selected_count = ctx.gs.recipe_maker_pattern[ctx.gs.recipe_maker_selected_slot].count
+	}
+	draw_text(Vec2{panel.x + 94, panel.y + 46}, fmt.tprintf("%v", selected_count), pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
+
+	row_y := panel.y + 22
+	prev_rect := shape.rect_make(Vec2{panel.x + 10, row_y}, Vec2{18, 12}, pivot=.bottom_left)
+	next_rect := shape.rect_make(Vec2{panel.x + 32, row_y}, Vec2{18, 12}, pivot=.bottom_left)
+	load_rect := shape.rect_make(Vec2{panel.x + 56, row_y}, Vec2{34, 12}, pivot=.bottom_left)
+	overwrite_rect := shape.rect_make(Vec2{panel.x + 94, row_y}, Vec2{50, 12}, pivot=.bottom_left)
+	save_new_rect := shape.rect_make(Vec2{panel.x + 148, row_y}, Vec2{42, 12}, pivot=.bottom_left)
+	clear_rect := shape.rect_make(Vec2{panel.x + 194, row_y}, Vec2{26, 12}, pivot=.bottom_left)
+
+	if draw_structure_maker_button(prev_rect, "<") && len(crafting_recipes) > 0 {
+		ctx.gs.recipe_maker_selected_index -= 1
+		if ctx.gs.recipe_maker_selected_index < 0 do ctx.gs.recipe_maker_selected_index = len(crafting_recipes)-1
+	}
+	if draw_structure_maker_button(next_rect, ">") && len(crafting_recipes) > 0 {
+		ctx.gs.recipe_maker_selected_index += 1
+		if ctx.gs.recipe_maker_selected_index >= len(crafting_recipes) do ctx.gs.recipe_maker_selected_index = 0
+	}
+	if draw_structure_maker_button(load_rect, "Load") && len(crafting_recipes) > 0 {
+		_ = recipe_maker_load_index(ctx.gs.recipe_maker_selected_index)
+	}
+	if draw_structure_maker_button(overwrite_rect, "Overwrite") {
+		_ = recipe_maker_overwrite_selected()
+	}
+	if draw_structure_maker_button(save_new_rect, "Save New") {
+		_ = recipe_maker_save_new()
+	}
+	if draw_structure_maker_button(clear_rect, "Clear") {
+		recipe_maker_clear()
+	}
+
+	status := "Ready"
+	if len(crafting_recipes) > 0 {
+		status = fmt.tprintf("Recipe %v / %v", ctx.gs.recipe_maker_selected_index+1, len(crafting_recipes))
+	}
+	if ctx.gs.recipe_maker_last_save_attempted {
+		status = "Saved" if ctx.gs.recipe_maker_last_save_ok else "Save failed"
+	}
+	draw_text(Vec2{panel.x + 10, panel.y + 8}, status, pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.82, 0.9, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.4)
+}
+
 app_shutdown :: proc() {
 	// called on exit
 }
@@ -2131,6 +2518,14 @@ game_update :: proc() {
 		ctx.gs.structure_maker_edit_backing = false
 		ctx.gs.structure_maker_last_save_attempted = false
 		ctx.gs.structure_maker_last_save_ok = true
+		ctx.gs.recipe_maker_selected_index = 0 if len(crafting_recipes) > 0 else -1
+		ctx.gs.recipe_maker_selected_slot = 0
+		ctx.gs.recipe_maker_last_save_attempted = false
+		ctx.gs.recipe_maker_last_save_ok = true
+		recipe_maker_clear()
+		if len(crafting_recipes) > 0 {
+			_ = recipe_maker_load_index(0)
+		}
 		reset_structure_maker_tiles()
 		player.pos = manual_spawn_world_pos_for_hitbox(Vec2{0, 0}, Vec2{8, 8}, .bottom_center)
 		_ = unlock_world_area_for_world_pos(player.pos)
@@ -4670,7 +5065,7 @@ close_all_ui_overlays :: proc() {
 }
 
 is_game_paused :: proc() -> bool {
-	return is_ui_overlay_open(UI_OVERLAY_PAUSE) || is_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER)
+	return is_ui_overlay_open(UI_OVERLAY_PAUSE) || is_ui_overlay_open(UI_OVERLAY_STRUCTURE_MAKER) || is_ui_overlay_open(UI_OVERLAY_RECIPE_MAKER)
 }
 
 crafting_set_output :: proc(inv: ^Inventory_State, item: Item_Kind, count: int) {
