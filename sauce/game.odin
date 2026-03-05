@@ -2365,26 +2365,32 @@ draw_recipe_maker_ui :: proc() {
 		draw_inventory_slot_at_layer(rect, ctx.gs.recipe_maker_pattern[i], selected=selected, hover=hover, layer=.pause_menu)
 		if hover && key_pressed(.LEFT_MOUSE) {
 			consume_key_pressed(.LEFT_MOUSE)
-			ctx.gs.recipe_maker_selected_slot = i
-			slot := &ctx.gs.recipe_maker_pattern[i]
-			next := cycle_recipe_item_kind(slot.item, +1, true)
-			if next == .nil {
-				slot^ = {}
+			if ctx.gs.recipe_maker_selected_slot != i {
+				ctx.gs.recipe_maker_selected_slot = i
 			} else {
-				slot.item = next
-				slot.count = max(1, slot.count)
+				slot := &ctx.gs.recipe_maker_pattern[i]
+				next := cycle_recipe_item_kind(slot.item, +1, true)
+				if next == .nil {
+					slot^ = {}
+				} else {
+					slot.item = next
+					slot.count = max(1, slot.count)
+				}
 			}
 		}
 		if hover && key_pressed(.RIGHT_MOUSE) {
 			consume_key_pressed(.RIGHT_MOUSE)
-			ctx.gs.recipe_maker_selected_slot = i
-			slot := &ctx.gs.recipe_maker_pattern[i]
-			prev := cycle_recipe_item_kind(slot.item, -1, true)
-			if prev == .nil {
-				slot^ = {}
+			if ctx.gs.recipe_maker_selected_slot != i {
+				ctx.gs.recipe_maker_selected_slot = i
 			} else {
-				slot.item = prev
-				slot.count = max(1, slot.count)
+				slot := &ctx.gs.recipe_maker_pattern[i]
+				prev := cycle_recipe_item_kind(slot.item, -1, true)
+				if prev == .nil {
+					slot^ = {}
+				} else {
+					slot.item = prev
+					slot.count = max(1, slot.count)
+				}
 			}
 		}
 	}
@@ -2396,17 +2402,23 @@ draw_recipe_maker_ui :: proc() {
 	draw_text(out_rect.xy + Vec2{-16, 12}, "=>", z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.75}, drop_shadow_col=Vec4{}, scale=0.5)
 	if out_hover && key_pressed(.LEFT_MOUSE) {
 		consume_key_pressed(.LEFT_MOUSE)
-		ctx.gs.recipe_maker_selected_slot = -1
-		next := cycle_recipe_item_kind(ctx.gs.recipe_maker_output.item, +1, false)
-		ctx.gs.recipe_maker_output.item = next
-		ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
+		if ctx.gs.recipe_maker_selected_slot != -1 {
+			ctx.gs.recipe_maker_selected_slot = -1
+		} else {
+			next := cycle_recipe_item_kind(ctx.gs.recipe_maker_output.item, +1, false)
+			ctx.gs.recipe_maker_output.item = next
+			ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
+		}
 	}
 	if out_hover && key_pressed(.RIGHT_MOUSE) {
 		consume_key_pressed(.RIGHT_MOUSE)
-		ctx.gs.recipe_maker_selected_slot = -1
-		prev := cycle_recipe_item_kind(ctx.gs.recipe_maker_output.item, -1, false)
-		ctx.gs.recipe_maker_output.item = prev
-		ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
+		if ctx.gs.recipe_maker_selected_slot != -1 {
+			ctx.gs.recipe_maker_selected_slot = -1
+		} else {
+			prev := cycle_recipe_item_kind(ctx.gs.recipe_maker_output.item, -1, false)
+			ctx.gs.recipe_maker_output.item = prev
+			ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
+		}
 	}
 
 	draw_text(Vec2{panel.x + 12, panel.y + 28}, "L/R click slot: cycle item", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.8, 0.86, 0.95, 0.85}, drop_shadow_col=Vec4{}, scale=0.4)

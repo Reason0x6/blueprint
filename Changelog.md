@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Recipe Maker slot clicks now follow select-then-edit behavior: clicking a different input/output recipe slot only selects it, and item cycling only occurs when clicking the already-selected slot.
 
 ## [880afa5] Move Recipe Maker input and output slots upward by 30 percent of slot height for improved panel alignment
 - Shifted Recipe Maker input/output recipe slots upward by 30% of slot height to better align vertical spacing in the centered panel layout.
