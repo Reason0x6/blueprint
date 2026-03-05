@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [6d5a9c7] Add per-entity manual pivot offsets and apply them to render/overlap/depth calculations
 - Added per-entity manual pivot offset support (`Entity.pivot_offset`) plus `set_entity_pivot_offset`, and applied it across default sprite draw, sprite-rect/overlap-rect generation, and depth-sort feet calculations so pivot shifts can be configured per entity without moving collision hitboxes.
 
 ## [987b3a9] Randomize chunk vegetation placement order with deterministic tile shuffling to remove column spawn artifacts
