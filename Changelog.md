@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Chunk generation now also spawns a deterministic random `20..35` bushes per unlocked chunk after structure placement, with spawn positions rejected if the bush hitbox would overlap any terrain/water/entity hitbox.
 
 ## [a14bfbc] Spawn 5-10 trees per unlocked chunk after structures while rejecting hitbox-overlapping placements
 - Chunk generation now spawns a deterministic random `5..10` trees per unlocked chunk (after structure placement), and tree spawn positions now reject any overlap with existing hitboxes (terrain/water/entity) before creating the entity.

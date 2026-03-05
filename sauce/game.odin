@@ -129,8 +129,12 @@ GRASS_SPAWN_TRIES_PER_CHUNK :: 28
 TREE_SPAWNS_PER_CHUNK_MIN :: 5
 TREE_SPAWNS_PER_CHUNK_MAX :: 10
 TREE_SPAWN_TRIES_PER_CHUNK :: 80
+BUSH_SPAWNS_PER_CHUNK_MIN :: 20
+BUSH_SPAWNS_PER_CHUNK_MAX :: 35
+BUSH_SPAWN_TRIES_PER_CHUNK :: 220
 VEG_MIN_DIST_GRASS: f32 : 12
 VEG_MIN_DIST_TREE: f32 : 22
+VEG_MIN_DIST_BUSH: f32 : 14
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
@@ -3288,6 +3292,53 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	}
 }
 
+random_bush_kind_for_seed :: proc(seed: u64) -> Entity_Kind {
+	r := random01_from_seed(seed ~ 0x3C6EF372FE94F82A)
+	pick := clamp(int(math.floor(r * 4.0)), 0, 3)
+	switch pick {
+	case 0: return .bush_1_ent
+	case 1: return .bush_2_ent
+	case 2: return .bush_3_ent
+	case: return .bush_4_ent
+	}
+}
+
+spawn_bushes_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
+	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	target_spawn_count := BUSH_SPAWNS_PER_CHUNK_MIN
+	if BUSH_SPAWNS_PER_CHUNK_MAX > BUSH_SPAWNS_PER_CHUNK_MIN {
+		span := BUSH_SPAWNS_PER_CHUNK_MAX - BUSH_SPAWNS_PER_CHUNK_MIN + 1
+		count_seed := u64(i64(chunk_x)*99194853094755497 + i64(chunk_y)*4294967311)
+		r := random01_from_seed(count_seed ~ 0xBF58476D1CE4E5B9)
+		target_spawn_count = BUSH_SPAWNS_PER_CHUNK_MIN + clamp(int(math.floor(r * f32(span))), 0, span-1)
+	}
+
+	spawned := 0
+	for i in 0..<BUSH_SPAWN_TRIES_PER_CHUNK {
+		if spawned >= target_spawn_count do break
+
+		base_seed := u64(i64(chunk_x)*4256249 + i64(chunk_y)*741457 + i64(i)*271)
+		rx := random01_from_seed(base_seed ~ 0x94D049BB133111EB)
+		ry := random01_from_seed(base_seed ~ 0xD2B74407B1CE6E93)
+		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
+		pos = snap_vec2_to_grid(pos, ENTITY_GRID_SIZE)
+		tile_x := int(math.floor(pos.x / tile_size.x))
+		tile_y := int(math.floor(pos.y / tile_size.y))
+		if !is_terrain_solid_tile(tile_x, tile_y) do continue
+
+		kind := random_bush_kind_for_seed(base_seed)
+		probe := Entity{kind = kind, pos = pos}
+		hitbox, ok := get_entity_hitbox_rect(probe)
+		if !ok do continue
+		if is_spawn_hitbox_overlapping(hitbox) do continue
+
+		if try_spawn_world_entity(kind, pos, VEG_MIN_DIST_BUSH) {
+			spawned += 1
+		}
+	}
+}
+
 structure_overlaps_player_hitbox :: proc(st: Terrain_Structure, origin_tile_x: int, origin_tile_y: int, player_hitbox: shape.Rect) -> bool {
 	for r in 0..<st.rows {
 		for c in 0..<st.cols {
@@ -3479,6 +3530,7 @@ spawn_vegetation_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 	mark_vegetation_chunk_spawned(chunk_x, chunk_y)
 
 	spawn_random_structure_for_chunk(chunk_x, chunk_y)
+	spawn_bushes_for_chunk(chunk_x, chunk_y, tile_size)
 	spawn_grass_for_chunk(chunk_x, chunk_y, tile_size)
 	spawn_trees_for_chunk(chunk_x, chunk_y, tile_size)
 }
