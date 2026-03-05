@@ -6255,7 +6255,7 @@ setup_item_pickup :: proc(using e: ^Entity) {
 		phase := f32(now()) * 3.0 + f32(e.handle.id) * 0.31
 		bob_y := math.sin(phase) * 1.5
 		bob_pos := e.pos + Vec2{0, bob_y}
-		xform := utils.xform_scale(Vec2{0.62, 0.62})
+		xform := utils.xform_scale(Vec2{0.75, 0.75})
 		draw_sprite_entity(&e0, bob_pos, e.sprite, xform=xform, anim_index=e.anim_index, draw_offset=e.draw_offset, flip_x=e.flip_x, pivot=e.draw_pivot)
 
 		if e.pickup_count > 1 {
@@ -6394,6 +6394,7 @@ setup_tree_ent :: proc(using e: ^Entity) {
 	kind = .tree_ent
 	sprite = .tree
 	draw_pivot = .bottom_center
+	set_entity_pivot_offset(e, Vec2{0, 4})
 	blocks_player = true
 	hide_when_behind = true
 	set_entity_durability(e, 16)
