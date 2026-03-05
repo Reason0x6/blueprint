@@ -135,6 +135,7 @@ HIT_DROP_MAX_FROM_EDGE: f32 : 40
 LOW_DURABILITY_FLASH_THRESHOLD :: 3
 LOW_DURABILITY_FLASH_ALPHA_MULT: f32 : 2.0
 LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
+DESTROY_FADE_DURATION_SEC: f64 : 0.18
 PLAYER_MOVE_SPEED: f32 : 112.0
 BIOME_CHUNK_SIZE_TILES :: 64
 STRUCTURE_CHUNK_INNER_AREA_TILES :: 15
@@ -371,6 +372,9 @@ Entity :: struct {
 	pending_place_pos: Vec2,
 	has_pending_place: bool,
 	growth_ready_time: f64,
+	destroy_fade_active: bool,
+	destroy_fade_start_time: f64,
+	destroy_fade_end_time: f64,
 	
 	// this gets zeroed every frame. Useful for passing data to other systems.
 	scratch: struct {
@@ -2577,6 +2581,9 @@ game_update :: proc() {
 	// big :update time
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
+		if update_entity_destroy_fade(e) {
+			continue
+		}
 		if is_decorative_perf_entity(e.kind) && !is_entity_pos_in_view_with_margin(e.pos, ctx.gs.cam_pos, view_half, DECOR_UPDATE_CULL_MARGIN) {
 			ctx.gs.perf_last_decor_updates_skipped += 1
 			continue
@@ -4560,10 +4567,10 @@ get_entity_hitbox_rect :: proc(e: Entity) -> (rect: shape.Rect, ok: bool) #optio
 		return shape.rect_make(center , Vec2{18, 20}, pivot=.bottom_center), true
 	case .bush_1_ent, .bush_3_ent, .bush_4_ent:
 		center := e.pos + Vec2{0, 24}
-		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true
+		return shape.rect_make(center, Vec2{30, 15}, pivot=.bottom_center), true
 	case .bush_2_ent:
 		center := e.pos + Vec2{0, 30}
-		return shape.rect_make(center, Vec2{30, 5}, pivot=.bottom_center), true
+		return shape.rect_make(center, Vec2{30, 15}, pivot=.bottom_center), true
 	case .dagger_projectile:
 		return shape.rect_make(e.pos, Vec2{4, 4}, pivot=.center_center), true
 	case .nil:
@@ -5990,6 +5997,39 @@ update_entity_hit_flash :: proc(e: ^Entity) {
 	}
 }
 
+entity_destroy_fade_alpha :: proc(e: Entity) -> f32 {
+	if !e.destroy_fade_active {
+		return 1.0
+	}
+	dur := max(0.0001, e.destroy_fade_end_time-e.destroy_fade_start_time)
+	t := math.clamp(f32((now()-e.destroy_fade_start_time)/dur), 0, 1)
+	return 1.0 - t
+}
+
+begin_entity_destroy_fade :: proc(e: ^Entity) {
+	if e.destroy_fade_active {
+		return
+	}
+	e.destroy_fade_active = true
+	e.destroy_fade_start_time = now()
+	e.destroy_fade_end_time = e.destroy_fade_start_time + DESTROY_FADE_DURATION_SEC
+	// Stop this entity affecting gameplay while it fades out.
+	e.blocks_player = false
+	e.has_move_target = false
+	e.has_queued_move_target = false
+}
+
+update_entity_destroy_fade :: proc(e: ^Entity) -> bool {
+	if !e.destroy_fade_active {
+		return false
+	}
+	if now() >= e.destroy_fade_end_time {
+		entity_destroy(e)
+		return true
+	}
+	return false
+}
+
 entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	if !is_valid(target^) {
 		return
@@ -6034,7 +6074,7 @@ entity_apply_hit :: proc(target: ^Entity, hitter: ^Entity) {
 	if is_bush_kind(target.kind) && roll_chance(BUSH_BREAK_FIBER_DROP_CHANCE, u64(target.handle.id)*1597+u64(ctx.gs.ticks)*911) {
 		spawn_item_pickup_towards_player(.fiber, 1, compute_hit_drop_spawn_pos(target))
 	}
-	entity_destroy(target)
+	begin_entity_destroy_fade(target)
 }
 
 find_hittable_entity_at_world_pos :: proc(mouse_world: Vec2) -> (^Entity, bool) {
@@ -6501,9 +6541,14 @@ draw_entity_default :: proc(e: Entity) {
 
 	xform := utils.xform_rotate(e.rotation)
 	entity_col := color.WHITE
+	fade_alpha := entity_destroy_fade_alpha(e)
+	if fade_alpha <= 0 {
+		return
+	}
 	if is_player_behind_entity(e) {
 		entity_col.a = 0.3
 	}
+	entity_col.a *= fade_alpha
 	draw_flip_x := e.flip_x
 	if e.sprite == .player_run {
 		// Current run sheet faces opposite direction from idle; normalize facing here.
@@ -6511,7 +6556,7 @@ draw_entity_default :: proc(e: Entity) {
 	}
 
 	if e.hit_flash.a > 0 {
-		outline_alpha := e.hit_flash.a
+		outline_alpha := e.hit_flash.a * fade_alpha
 		if e.durability > 0 && e.durability < LOW_DURABILITY_FLASH_THRESHOLD {
 			outline_alpha = min(1.0, outline_alpha * LOW_DURABILITY_FLASH_ALPHA_MULT)
 		}
@@ -6566,8 +6611,10 @@ draw_sprite_entity :: proc(
 		col_override.xyz = entity.hit_flash.xyz
 		col_override.a = max(col_override.a, entity.hit_flash.a)
 	}
+	col0 := col
+	col0.a *= entity_destroy_fade_alpha(entity^)
 	draw_pos := pos + entity.pivot_offset
-	draw_sprite(draw_pos, sprite, pivot, flip_x, draw_offset, xform, anim_index, col, col_override, z_layer, flags, params, crop_top, crop_left, crop_bottom, crop_right)
+	draw_sprite(draw_pos, sprite, pivot, flip_x, draw_offset, xform, anim_index, col0, col_override, z_layer, flags, params, crop_top, crop_left, crop_bottom, crop_right)
 }
 
 //
