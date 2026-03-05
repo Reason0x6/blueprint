@@ -123,15 +123,15 @@ LOW_DURABILITY_FLASH_DECAY_MULT: f32 : 0.45
 PLAYER_MOVE_SPEED: f32 : 112.0
 BIOME_CHUNK_SIZE_TILES :: 64
 STRUCTURE_CHUNK_INNER_AREA_TILES :: 15
-VEG_SPAWN_RADIUS_CHUNKS :: 2
+VEG_SPAWN_RADIUS_CHUNKS :: 1
 GRASS_SPAWNS_PER_CHUNK :: 11
 GRASS_SPAWN_TRIES_PER_CHUNK :: 28
-TREE_SPAWNS_PER_CHUNK_MIN :: 5
-TREE_SPAWNS_PER_CHUNK_MAX :: 10
-TREE_SPAWN_TRIES_PER_CHUNK :: 80
-BUSH_SPAWNS_PER_CHUNK_MIN :: 20
-BUSH_SPAWNS_PER_CHUNK_MAX :: 35
-BUSH_SPAWN_TRIES_PER_CHUNK :: 220
+TREE_SPAWNS_PER_CHUNK_MIN :: 10
+TREE_SPAWNS_PER_CHUNK_MAX :: 20
+TREE_SPAWN_TRIES_PER_CHUNK :: 180
+BUSH_SPAWNS_PER_CHUNK_MIN :: 40
+BUSH_SPAWNS_PER_CHUNK_MAX :: 80
+BUSH_SPAWN_TRIES_PER_CHUNK :: 520
 VEG_MIN_DIST_GRASS: f32 : 12
 VEG_MIN_DIST_TREE: f32 : 22
 VEG_MIN_DIST_BUSH: f32 : 14
@@ -3225,6 +3225,45 @@ is_spawn_position_clear :: proc(pos: Vec2, min_dist: f32) -> bool {
 	return true
 }
 
+is_spawn_hitbox_blocked_by_world :: proc(rect: shape.Rect) -> bool {
+	return is_rect_touching_locked_world_area(rect) || is_rect_touching_water_collision(rect) || is_rect_touching_terrain_block_collision(rect)
+}
+
+rect_overlaps_any :: proc(rect: shape.Rect, others: []shape.Rect) -> bool {
+	for other in others {
+		hit, _ := shape.collide(rect, other)
+		if hit {
+			return true
+		}
+	}
+	return false
+}
+
+collect_chunk_spawn_overlap_rects :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) -> [dynamic]shape.Rect {
+	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	chunk_world_max := chunk_world_min + Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
+	chunk_rect := shape.Rect{chunk_world_min.x, chunk_world_min.y, chunk_world_max.x, chunk_world_max.y}
+	chunk_rect = shape.rect_expand(chunk_rect, 64)
+
+	out := make([dynamic]shape.Rect, 0, 64, allocator=context.temp_allocator)
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		if !(e.blocks_player || e.kind == .tree_ent || e.kind == .bush_1_ent || e.kind == .bush_2_ent || e.kind == .bush_3_ent || e.kind == .bush_4_ent) {
+			continue
+		}
+		hitbox, ok := get_entity_hitbox_rect(e^)
+		if !ok {
+			continue
+		}
+		hit, _ := shape.collide(chunk_rect, hitbox)
+		if !hit {
+			continue
+		}
+		append(&out, hitbox)
+	}
+	return out
+}
+
 try_spawn_world_entity :: proc(kind: Entity_Kind, pos: Vec2, min_dist: f32) -> bool {
 	if !can_spawn_entity_now() {
 		return false
@@ -3261,8 +3300,6 @@ spawn_grass_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 }
 
 spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
-	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
-	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
 	target_spawn_count := TREE_SPAWNS_PER_CHUNK_MIN
 	if TREE_SPAWNS_PER_CHUNK_MAX > TREE_SPAWNS_PER_CHUNK_MIN {
 		span := TREE_SPAWNS_PER_CHUNK_MAX - TREE_SPAWNS_PER_CHUNK_MIN + 1
@@ -3271,24 +3308,105 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 		target_spawn_count = TREE_SPAWNS_PER_CHUNK_MIN + clamp(int(math.floor(r * f32(span))), 0, span-1)
 	}
 
-	spawned := 0
-	for i in 0..<TREE_SPAWN_TRIES_PER_CHUNK {
-		if spawned >= target_spawn_count do break
-
-		base_seed := u64(i64(chunk_x)*116129781 + i64(chunk_y)*961748927 + i64(i)*31337)
-		rx := random01_from_seed(base_seed ~ 0x9E3779B9)
-		ry := random01_from_seed(base_seed ~ 0x7F4A7C15)
-		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
-		pos = snap_vec2_to_grid(pos, ENTITY_GRID_SIZE)
-		tile_x := int(math.floor(pos.x / tile_size.x))
-		tile_y := int(math.floor(pos.y / tile_size.y))
-		if !is_terrain_solid_tile(tile_x, tile_y) do continue
-		tree_hitbox := shape.rect_make(pos, Vec2{50, 30}, pivot=.bottom_center)
-		if is_spawn_hitbox_overlapping(tree_hitbox) do continue
-
-		if try_spawn_world_entity(.tree_ent, pos, VEG_MIN_DIST_TREE) {
-			spawned += 1
+	existing_overlap_rects := collect_chunk_spawn_overlap_rects(chunk_x, chunk_y, tile_size)
+	placed_rects := make([dynamic]shape.Rect, 0, target_spawn_count, allocator=context.temp_allocator)
+	base_seed := u64(i64(chunk_x)*116129781 + i64(chunk_y)*961748927)
+	placed := 0
+	tile_count := BIOME_CHUNK_SIZE_TILES * BIOME_CHUNK_SIZE_TILES
+	start := int((base_seed ~ 0x9E3779B9) % u64(tile_count))
+	step := int((base_seed ~ 0x7F4A7C15) % u64(tile_count))
+	if step <= 0 {
+		step = 1
+	}
+	if step % 2 == 0 {
+		step += 1
+	}
+	idx := start
+	chunk_min_x := chunk_x * BIOME_CHUNK_SIZE_TILES
+	chunk_min_y := chunk_y * BIOME_CHUNK_SIZE_TILES
+	for checked := 0; checked < tile_count; checked += 1 {
+		if placed >= target_spawn_count || !can_spawn_entity_now() {
+			break
 		}
+		tile_x := chunk_min_x + (idx % BIOME_CHUNK_SIZE_TILES)
+		tile_y := chunk_min_y + (idx / BIOME_CHUNK_SIZE_TILES)
+		idx = (idx + step) % tile_count
+
+		if !is_terrain_solid_tile(tile_x, tile_y) {
+			continue
+		}
+
+		pos := Vec2{(f32(tile_x) + 0.5) * tile_size.x, (f32(tile_y) + 0.5) * tile_size.y}
+		probe := Entity{kind = .tree_ent, pos = pos}
+		tree_hitbox, ok := get_entity_hitbox_rect(probe)
+		if !ok {
+			continue
+		}
+		if is_spawn_hitbox_blocked_by_world(tree_hitbox) || rect_overlaps_any(tree_hitbox, existing_overlap_rects[:]) || rect_overlaps_any(tree_hitbox, placed_rects[:]) {
+			continue
+		}
+
+		e := entity_create(.tree_ent)
+		e.pos = pos
+		append(&placed_rects, tree_hitbox)
+		placed += 1
+	}
+
+}
+
+spawn_bushes_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
+	spawned := 0
+	target_spawn_count := BUSH_SPAWNS_PER_CHUNK_MIN
+	if BUSH_SPAWNS_PER_CHUNK_MAX > BUSH_SPAWNS_PER_CHUNK_MIN {
+		span := BUSH_SPAWNS_PER_CHUNK_MAX - BUSH_SPAWNS_PER_CHUNK_MIN + 1
+		count_seed := u64(i64(chunk_x)*99194853094755497 + i64(chunk_y)*4294967311)
+		r := random01_from_seed(count_seed ~ 0xBF58476D1CE4E5B9)
+		target_spawn_count = BUSH_SPAWNS_PER_CHUNK_MIN + clamp(int(math.floor(r * f32(span))), 0, span-1)
+	}
+
+	existing_overlap_rects := collect_chunk_spawn_overlap_rects(chunk_x, chunk_y, tile_size)
+	placed_rects := make([dynamic]shape.Rect, 0, target_spawn_count, allocator=context.temp_allocator)
+	base_seed := u64(i64(chunk_x)*4256249 + i64(chunk_y)*741457)
+	tile_count := BIOME_CHUNK_SIZE_TILES * BIOME_CHUNK_SIZE_TILES
+	start := int((base_seed ~ 0x94D049BB133111EB) % u64(tile_count))
+	step := int((base_seed ~ 0xD2B74407B1CE6E93) % u64(tile_count))
+	if step <= 0 {
+		step = 1
+	}
+	if step % 2 == 0 {
+		step += 1
+	}
+	idx := start
+	chunk_min_x := chunk_x * BIOME_CHUNK_SIZE_TILES
+	chunk_min_y := chunk_y * BIOME_CHUNK_SIZE_TILES
+	for checked := 0; checked < tile_count; checked += 1 {
+		if spawned >= target_spawn_count || !can_spawn_entity_now() {
+			break
+		}
+		tile_x := chunk_min_x + (idx % BIOME_CHUNK_SIZE_TILES)
+		tile_y := chunk_min_y + (idx / BIOME_CHUNK_SIZE_TILES)
+		idx = (idx + step) % tile_count
+
+		if !is_terrain_solid_tile(tile_x, tile_y) {
+			continue
+		}
+
+		pos := Vec2{(f32(tile_x) + 0.5) * tile_size.x, (f32(tile_y) + 0.5) * tile_size.y}
+		seed := u64(i64(tile_x)*73856093 + i64(tile_y)*19349663 + i64(chunk_x)*83492791 + i64(chunk_y)*2654435761)
+		kind := random_bush_kind_for_seed(seed)
+		probe := Entity{kind = kind, pos = pos}
+		hitbox, ok := get_entity_hitbox_rect(probe)
+		if !ok {
+			continue
+		}
+		if is_spawn_hitbox_blocked_by_world(hitbox) || rect_overlaps_any(hitbox, existing_overlap_rects[:]) || rect_overlaps_any(hitbox, placed_rects[:]) {
+			continue
+		}
+
+		e := entity_create(kind)
+		e.pos = pos
+		append(&placed_rects, hitbox)
+		spawned += 1
 	}
 }
 
@@ -3300,42 +3418,6 @@ random_bush_kind_for_seed :: proc(seed: u64) -> Entity_Kind {
 	case 1: return .bush_2_ent
 	case 2: return .bush_3_ent
 	case: return .bush_4_ent
-	}
-}
-
-spawn_bushes_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
-	chunk_world_min := Vec2{f32(chunk_x * BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(chunk_y * BIOME_CHUNK_SIZE_TILES) * tile_size.y}
-	chunk_world_size := Vec2{f32(BIOME_CHUNK_SIZE_TILES) * tile_size.x, f32(BIOME_CHUNK_SIZE_TILES) * tile_size.y}
-	target_spawn_count := BUSH_SPAWNS_PER_CHUNK_MIN
-	if BUSH_SPAWNS_PER_CHUNK_MAX > BUSH_SPAWNS_PER_CHUNK_MIN {
-		span := BUSH_SPAWNS_PER_CHUNK_MAX - BUSH_SPAWNS_PER_CHUNK_MIN + 1
-		count_seed := u64(i64(chunk_x)*99194853094755497 + i64(chunk_y)*4294967311)
-		r := random01_from_seed(count_seed ~ 0xBF58476D1CE4E5B9)
-		target_spawn_count = BUSH_SPAWNS_PER_CHUNK_MIN + clamp(int(math.floor(r * f32(span))), 0, span-1)
-	}
-
-	spawned := 0
-	for i in 0..<BUSH_SPAWN_TRIES_PER_CHUNK {
-		if spawned >= target_spawn_count do break
-
-		base_seed := u64(i64(chunk_x)*4256249 + i64(chunk_y)*741457 + i64(i)*271)
-		rx := random01_from_seed(base_seed ~ 0x94D049BB133111EB)
-		ry := random01_from_seed(base_seed ~ 0xD2B74407B1CE6E93)
-		pos := chunk_world_min + Vec2{rx * chunk_world_size.x, ry * chunk_world_size.y}
-		pos = snap_vec2_to_grid(pos, ENTITY_GRID_SIZE)
-		tile_x := int(math.floor(pos.x / tile_size.x))
-		tile_y := int(math.floor(pos.y / tile_size.y))
-		if !is_terrain_solid_tile(tile_x, tile_y) do continue
-
-		kind := random_bush_kind_for_seed(base_seed)
-		probe := Entity{kind = kind, pos = pos}
-		hitbox, ok := get_entity_hitbox_rect(probe)
-		if !ok do continue
-		if is_spawn_hitbox_overlapping(hitbox) do continue
-
-		if try_spawn_world_entity(kind, pos, VEG_MIN_DIST_BUSH) {
-			spawned += 1
-		}
 	}
 }
 

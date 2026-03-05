@@ -1,6 +1,10 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Reworked chunk tree and bush generation to scan deterministic tile candidates across the whole chunk instead of fixed random-try loops, so spawn counts can be satisfied when free space exists.
+- Vegetation spawn overlap checks now use cached per-chunk entity hitboxes plus world collision checks, removing per-candidate full-entity scans and reducing chunk-generation CPU cost.
+- Tree generation keeps deterministic `5..10` targets and bush generation keeps deterministic `20..35` targets, both still running after structure placement.
+- Reduced chunk generation pressure around the player by lowering vegetation spawn radius from `2` to `1` chunk.
 
 ## [7ed96b9] Move the bush spawn changelog entry under its commit SHA section
 - Moved the bush-spawn changelog note from HEAD into a commit-hashed section.
