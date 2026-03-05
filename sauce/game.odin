@@ -66,7 +66,9 @@ Game_State :: struct {
 	structure_maker_paint_active: bool,
 	structure_maker_paint_token: int,
 	structure_maker_paint_flip_x: bool,
-	structure_maker_underlay_mode: Terrain_Underlay_Mode,
+	structure_maker_edit_backing: bool,
+	structure_maker_backing_block11: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]bool,
+	structure_maker_paint_backing_block11: bool,
 	structure_maker_selected_index: int,
 	structure_maker_next_id: int,
 	structure_maker_last_saved_id: int,
@@ -220,6 +222,7 @@ Terrain_Structure :: struct {
 	rows: int,
 	cols: int,
 	tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]Terrain_Tile,
+	backing_block11: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]bool,
 }
 
 Terrain_Structure_Instance :: struct {
@@ -1019,8 +1022,26 @@ parse_terrain_tile_token :: proc(tok: string) -> (Terrain_Tile, bool) {
 	return Terrain_Tile{kind=.block, block_index=block_index}, true
 }
 
-parse_terrain_structure_expr :: proc(name: string, expr_raw: string) -> bool {
-	expr := compact_no_ws(expr_raw)
+parse_terrain_backing_token :: proc(tok: string) -> (block11: bool, ok: bool) {
+	tile, tile_ok := parse_terrain_tile_token(tok)
+	if !tile_ok {
+		return false, false
+	}
+	if tile.kind == .block {
+		return tile.block_index == 11, true
+	}
+	return false, true
+}
+
+parse_terrain_structure_expr :: proc(name: string, expr_raw: string, default_underlay_mode := Terrain_Underlay_Mode.water) -> bool {
+	expr_full := compact_no_ws(expr_raw)
+	expr := expr_full
+	backing_expr := ""
+	sep := strings.index(expr_full, "||")
+	if sep >= 0 {
+		expr = expr_full[:sep]
+		backing_expr = expr_full[sep+2:]
+	}
 	if len(expr) < 4 || !strings.has_prefix(expr, "[[") || !strings.has_suffix(expr, "]]") {
 		log.warnf("terrain structure %q invalid format", name)
 		return false
@@ -1038,7 +1059,7 @@ parse_terrain_structure_expr :: proc(name: string, expr_raw: string) -> bool {
 		return false
 	}
 
-	st := Terrain_Structure{name=name, underlay_mode=.water}
+	st := Terrain_Structure{name=name, underlay_mode=default_underlay_mode}
 	st.name = strings.clone(name, allocator=context.allocator)
 	st.rows = len(row_strs)
 
@@ -1062,6 +1083,37 @@ parse_terrain_structure_expr :: proc(name: string, expr_raw: string) -> bool {
 				return false
 			}
 			st.tiles[r][c] = tile
+			st.backing_block11[r][c] = default_underlay_mode == .block11
+		}
+	}
+
+	if len(backing_expr) > 0 {
+		if len(backing_expr) < 4 || !strings.has_prefix(backing_expr, "[[") || !strings.has_suffix(backing_expr, "]]") {
+			log.warnf("terrain structure %q invalid backing format", name)
+			return false
+		}
+
+		back_body := backing_expr[2:len(backing_expr)-2]
+		back_rows := strings.split(back_body, "],[")
+		if len(back_rows) != st.rows {
+			log.warnf("terrain structure %q backing row mismatch (%v vs %v)", name, len(back_rows), st.rows)
+			return false
+		}
+
+		for r in 0..<len(back_rows) {
+			cells := strings.split(back_rows[r], ",")
+			if len(cells) != st.cols {
+				log.warnf("terrain structure %q backing col mismatch on row %v (%v vs %v)", name, r, len(cells), st.cols)
+				return false
+			}
+			for c in 0..<len(cells) {
+				block11, ok := parse_terrain_backing_token(cells[c])
+				if !ok {
+					log.warnf("terrain structure %q invalid backing token %q at [%v,%v]", name, cells[c], r, c)
+					return false
+				}
+				st.backing_block11[r][c] = block11
+			}
 		}
 	}
 
@@ -1124,9 +1176,7 @@ load_terrain_structures :: proc() {
 			continue
 		}
 
-		if parse_terrain_structure_expr(name, string(expr_buf[:])) {
-			terrain_structures[len(terrain_structures)-1].underlay_mode = underlay_mode
-		}
+		_ = parse_terrain_structure_expr(name, string(expr_buf[:]), underlay_mode)
 	}
 
 	if len(terrain_structures) == 0 {
@@ -1149,6 +1199,7 @@ reset_structure_maker_tiles :: proc(fill_token := TERRAIN_DEFAULT_BLOCK_INDEX) {
 		for c in 0..<MAX_TERRAIN_STRUCTURE_COLS {
 			ctx.gs.structure_maker_tiles[r][c] = fill_token
 			ctx.gs.structure_maker_tiles_flip_x[r][c] = false
+			ctx.gs.structure_maker_backing_block11[r][c] = false
 		}
 	}
 }
@@ -1179,6 +1230,23 @@ build_structure_expr_from_maker :: proc(cols: int, rows: int) -> string {
 			}
 			tok := structure_maker_tile_token_to_text(ctx.gs.structure_maker_tiles[r][c], ctx.gs.structure_maker_tiles_flip_x[r][c])
 			append(&buf, tok)
+		}
+	}
+
+	append(&buf, "]]||[[")
+	for r in 0..<rows {
+		if r > 0 {
+			append(&buf, "],[")
+		}
+		for c in 0..<cols {
+			if c > 0 {
+				append(&buf, ",")
+			}
+			if ctx.gs.structure_maker_backing_block11[r][c] {
+				append(&buf, "11")
+			} else {
+				append(&buf, "0")
+			}
 		}
 	}
 
@@ -1236,6 +1304,22 @@ build_structure_expr_from_data :: proc(st: Terrain_Structure) -> string {
 			append(&buf, structure_maker_tile_token_to_text(token, flip))
 		}
 	}
+	append(&buf, "]]||[[")
+	for r in 0..<st.rows {
+		if r > 0 {
+			append(&buf, "],[")
+		}
+		for c in 0..<st.cols {
+			if c > 0 {
+				append(&buf, ",")
+			}
+			if st.backing_block11[r][c] {
+				append(&buf, "11")
+			} else {
+				append(&buf, "0")
+			}
+		}
+	}
 	append(&buf, "]]")
 	return string(buf[:])
 }
@@ -1249,8 +1333,7 @@ write_all_terrain_structures_to_file :: proc() -> bool {
 			continue
 		}
 		expr := build_structure_expr_from_data(st)
-		header := format_structure_name_with_underlay(st.name, st.underlay_mode)
-		line := fmt.tprintf("%v = %v\n", header, expr)
+		line := fmt.tprintf("%v = %v\n", st.name, expr)
 		append(&buf, line)
 	}
 
@@ -1281,13 +1364,13 @@ load_structure_into_maker :: proc(index: int) -> bool {
 	ctx.gs.structure_maker_rows = rows
 	ctx.gs.structure_maker_cols = cols
 	ctx.gs.structure_maker_selected_index = index
-	ctx.gs.structure_maker_underlay_mode = st.underlay_mode
 
 	for r in 0..<rows {
 		for c in 0..<cols {
 			tok, flip := terrain_tile_to_structure_maker_token(st.tiles[r][c])
 			ctx.gs.structure_maker_tiles[r][c] = tok
 			ctx.gs.structure_maker_tiles_flip_x[r][c] = flip
+			ctx.gs.structure_maker_backing_block11[r][c] = st.backing_block11[r][c]
 		}
 	}
 	return true
@@ -1305,7 +1388,6 @@ overwrite_structure_from_maker :: proc(index: int) -> bool {
 	st := &terrain_structures[index]
 	st.cols = cols
 	st.rows = rows
-	st.underlay_mode = ctx.gs.structure_maker_underlay_mode
 
 	for r in 0..<MAX_TERRAIN_STRUCTURE_ROWS {
 		for c in 0..<MAX_TERRAIN_STRUCTURE_COLS {
@@ -1313,8 +1395,10 @@ overwrite_structure_from_maker :: proc(index: int) -> bool {
 				tok := ctx.gs.structure_maker_tiles[r][c]
 				flip := ctx.gs.structure_maker_tiles_flip_x[r][c]
 				st.tiles[r][c] = structure_maker_tile_to_terrain_tile(tok, flip)
+				st.backing_block11[r][c] = ctx.gs.structure_maker_backing_block11[r][c]
 			} else {
 				st.tiles[r][c] = {}
+				st.backing_block11[r][c] = false
 			}
 		}
 	}
@@ -1345,8 +1429,7 @@ save_structure_from_maker :: proc() -> bool {
 	}
 	ctx.gs.structure_maker_next_id = save_id + 1
 
-	header := format_structure_name_with_underlay(name, ctx.gs.structure_maker_underlay_mode)
-	line := fmt.tprintf("%v = %v\n", header, expr)
+	line := fmt.tprintf("%v = %v\n", name, expr)
 	path := "res/data/terrain_structures.txt"
 	existing, read_err := os.read_entire_file_from_path(path, context.temp_allocator)
 
@@ -1377,8 +1460,6 @@ save_structure_from_maker :: proc() -> bool {
 		ctx.gs.structure_maker_last_save_ok = false
 		return false
 	}
-	terrain_structures[len(terrain_structures)-1].underlay_mode = ctx.gs.structure_maker_underlay_mode
-
 	ctx.gs.structure_maker_selected_index = len(terrain_structures) - 1
 	ctx.gs.structure_maker_last_saved_id = save_id
 	ctx.gs.structure_maker_last_save_attempted = true
@@ -1788,7 +1869,7 @@ draw_structure_maker_ui :: proc() {
 	row_plus := shape.rect_make(Vec2{panel.x + 186, row_y}, btn_size, pivot=.top_left)
 	save_rect := shape.rect_make(Vec2{panel.x + 214, row_y}, Vec2{46, 12}, pivot=.top_left)
 	clear_rect := shape.rect_make(Vec2{panel.x + 264, row_y}, Vec2{46, 12}, pivot=.top_left)
-	underlay_rect := shape.rect_make(Vec2{panel.x + 314, row_y}, Vec2{98, 12}, pivot=.top_left)
+	layer_rect := shape.rect_make(Vec2{panel.x + 314, row_y}, Vec2{98, 12}, pivot=.top_left)
 	selector_y := panel.y + 34
 	prev_struct_rect := shape.rect_make(Vec2{panel.x + 8, selector_y}, Vec2{18, 12}, pivot=.bottom_left)
 	next_struct_rect := shape.rect_make(Vec2{panel.x + 30, selector_y}, Vec2{18, 12}, pivot=.bottom_left)
@@ -1813,12 +1894,12 @@ draw_structure_maker_ui :: proc() {
 	if draw_structure_maker_button(save_rect, "Save") {
 		_ = save_structure_from_maker()
 	}
-	underlay_label := "Underlay: Water"
-	if ctx.gs.structure_maker_underlay_mode == .block11 {
-		underlay_label = "Underlay: Block11"
+	layer_label := "Layer: FG"
+	if ctx.gs.structure_maker_edit_backing {
+		layer_label = "Layer: Backing"
 	}
-	if draw_structure_maker_button(underlay_rect, underlay_label) {
-		ctx.gs.structure_maker_underlay_mode = .block11 if ctx.gs.structure_maker_underlay_mode == .water else .water
+	if draw_structure_maker_button(layer_rect, layer_label) {
+		ctx.gs.structure_maker_edit_backing = !ctx.gs.structure_maker_edit_backing
 	}
 	if draw_structure_maker_button(prev_struct_rect, "<") && len(terrain_structures) > 0 {
 		ctx.gs.structure_maker_selected_index -= 1
@@ -1842,11 +1923,7 @@ draw_structure_maker_ui :: proc() {
 	selected_label := "Selected: none"
 	if len(terrain_structures) > 0 && ctx.gs.structure_maker_selected_index >= 0 && ctx.gs.structure_maker_selected_index < len(terrain_structures) {
 		st := terrain_structures[ctx.gs.structure_maker_selected_index]
-		bg := "water"
-		if st.underlay_mode == .block11 {
-			bg = "block11"
-		}
-		selected_label = fmt.tprintf("Selected: %v (%v x %v, bg=%v)", st.name, st.cols, st.rows, bg)
+		selected_label = fmt.tprintf("Selected: %v (%v x %v)", st.name, st.cols, st.rows)
 	}
 	draw_text(Vec2{panel.x + 160, selector_y + 11}, selected_label, pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.88, 0.93, 1.0, 0.86}, drop_shadow_col=Vec4{}, scale=0.34)
 
@@ -1863,7 +1940,7 @@ draw_structure_maker_ui :: proc() {
 		}
 	}
 	draw_text(Vec2{panel.x + 8, selector_y + 26}, status, pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.75, 0.9, 1.0, 0.85}, drop_shadow_col=Vec4{}, scale=0.36)
-	draw_text(Vec2{panel.x + 8, row_y - 21}, "LMB fwd, RMB back, MMB drag paint", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
+	draw_text(Vec2{panel.x + 8, row_y - 21}, "Layer FG: full cycle | Layer Backing: 0/11", pivot=.top_left, z_layer=.pause_menu, col=Vec4{0.85, 0.85, 0.9, 0.8}, drop_shadow_col=Vec4{}, scale=0.34)
 
 	if !key_down(.MIDDLE_MOUSE) {
 		ctx.gs.structure_maker_paint_active = false
@@ -1880,7 +1957,16 @@ draw_structure_maker_ui :: proc() {
 			rect := shape.Rect{cell_pos.x, cell_pos.y, cell_pos.x + cell, cell_pos.y + cell}
 			token := ctx.gs.structure_maker_tiles[r][c]
 			flip_x := ctx.gs.structure_maker_tiles_flip_x[r][c]
-			draw_structure_maker_tile_preview(rect, token, flip_x)
+			backing_token := 0
+			if ctx.gs.structure_maker_backing_block11[r][c] {
+				backing_token = 11
+			}
+			if ctx.gs.structure_maker_edit_backing {
+				draw_structure_maker_tile_preview(rect, backing_token, false)
+			} else {
+				draw_structure_maker_tile_preview(rect, backing_token, false)
+				draw_structure_maker_tile_preview(rect, token, flip_x)
+			}
 			draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.15}, .pause_menu, 1)
 
 			hover, pressed := raw_button(rect)
@@ -1890,20 +1976,33 @@ draw_structure_maker_ui :: proc() {
 			}
 			middle_pressed := hover && key_pressed(.MIDDLE_MOUSE)
 			if middle_pressed {
-				ctx.gs.structure_maker_paint_active = true
-				ctx.gs.structure_maker_paint_token = token
-				ctx.gs.structure_maker_paint_flip_x = flip_x
+				if ctx.gs.structure_maker_edit_backing {
+					ctx.gs.structure_maker_paint_active = true
+					ctx.gs.structure_maker_paint_backing_block11 = ctx.gs.structure_maker_backing_block11[r][c]
+				} else {
+					ctx.gs.structure_maker_paint_active = true
+					ctx.gs.structure_maker_paint_token = token
+					ctx.gs.structure_maker_paint_flip_x = flip_x
+				}
 				consume_key_pressed(.MIDDLE_MOUSE)
 			}
 			if hover {
 				draw_rect_outline_only(rect, Vec4{1, 1, 1, 0.45}, .pause_menu, 1)
 			}
 			if hover && key_down(.MIDDLE_MOUSE) && ctx.gs.structure_maker_paint_active {
-				ctx.gs.structure_maker_tiles[r][c] = ctx.gs.structure_maker_paint_token
-				ctx.gs.structure_maker_tiles_flip_x[r][c] = ctx.gs.structure_maker_paint_flip_x
+				if ctx.gs.structure_maker_edit_backing {
+					ctx.gs.structure_maker_backing_block11[r][c] = ctx.gs.structure_maker_paint_backing_block11
+				} else {
+					ctx.gs.structure_maker_tiles[r][c] = ctx.gs.structure_maker_paint_token
+					ctx.gs.structure_maker_tiles_flip_x[r][c] = ctx.gs.structure_maker_paint_flip_x
+				}
 				continue
 			}
 			if pressed {
+				if ctx.gs.structure_maker_edit_backing {
+					ctx.gs.structure_maker_backing_block11[r][c] = !ctx.gs.structure_maker_backing_block11[r][c]
+					continue
+				}
 				next_token := token
 				next_flip := flip_x
 				if token <= 0 {
@@ -1927,6 +2026,10 @@ draw_structure_maker_ui :: proc() {
 				ctx.gs.structure_maker_tiles[r][c] = next_token
 				ctx.gs.structure_maker_tiles_flip_x[r][c] = next_flip
 			} else if right_pressed {
+				if ctx.gs.structure_maker_edit_backing {
+					ctx.gs.structure_maker_backing_block11[r][c] = !ctx.gs.structure_maker_backing_block11[r][c]
+					continue
+				}
 				prev_token := token
 				prev_flip := flip_x
 				if token <= 0 {
@@ -1990,7 +2093,7 @@ game_update :: proc() {
 		ctx.gs.structure_maker_rows = 6
 		ctx.gs.structure_maker_next_id = len(terrain_structures) + 1
 		ctx.gs.structure_maker_selected_index = 0 if len(terrain_structures) > 0 else -1
-		ctx.gs.structure_maker_underlay_mode = .water
+		ctx.gs.structure_maker_edit_backing = false
 		ctx.gs.structure_maker_last_save_attempted = false
 		ctx.gs.structure_maker_last_save_ok = true
 		reset_structure_maker_tiles()
@@ -2748,7 +2851,11 @@ terrain_tile_with_underlay_for_tile :: proc(tile_x: int, tile_y: int) -> (tile: 
 			continue
 		}
 
-		return st.tiles[rel_y][rel_x], st.underlay_mode
+		mode := Terrain_Underlay_Mode.water
+		if st.backing_block11[rel_y][rel_x] {
+			mode = .block11
+		}
+		return st.tiles[rel_y][rel_x], mode
 	}
 	return Terrain_Tile{kind=.block, block_index=TERRAIN_DEFAULT_BLOCK_INDEX}, .water
 }
