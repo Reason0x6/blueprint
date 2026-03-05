@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [5d5b00b] Add perf debug stats UI and reduce vegetation-related frame cost while making tree/bush placement look more natural
 - Added a pause-menu `Perf Stats: ON/OFF` debug toggle with live HUD diagnostics (`frame ms`, total/visible/sorted entity counts, skipped decorative updates, vegetation counts, unlocked areas, spawned chunk count, structure count) to help pinpoint FPS bottlenecks.
 - Improved natural spawn variation by jittering tree and bush spawn positions within tiles and excluding those natural entities from forced grid-center snap, producing less grid-like placement while preserving collision checks.
 - Reduced frame cost from large vegetation populations by culling offscreen decorative updates (grass/bush animation/update) and culling offscreen entities before draw-order sorting/draw submission.
