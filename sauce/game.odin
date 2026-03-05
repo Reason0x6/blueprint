@@ -2337,11 +2337,11 @@ draw_recipe_maker_ui :: proc() {
 	screen_rect := shape.rect_make(Vec2{sx, sy}, Vec2{f32(GAME_RES_WIDTH), f32(GAME_RES_HEIGHT)}, pivot=.center_center)
 	draw_rect(screen_rect, col=Vec4{0.08, 0.08, 0.08, 0.55}, z_layer=.pause_menu)
 
-	panel := shape.rect_make(Vec2{f32(GAME_RES_WIDTH)-8, f32(GAME_RES_HEIGHT)-8}, Vec2{228, 202}, pivot=.top_right)
+	panel := shape.rect_make(Vec2{sx, sy}, Vec2{246, 210}, pivot=.center_center)
 	draw_rect(panel, col=Vec4{0.02, 0.02, 0.02, 0.94}, outline_col=Vec4{1, 1, 1, 0.28}, z_layer=.pause_menu)
 	draw_text(Vec2{panel.x + 8, panel.w - 8}, "Recipe Maker", pivot=.top_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.95}, drop_shadow_col=Vec4{}, scale=0.6)
 
-	close_rect := shape.rect_make(Vec2{panel.z - 18, panel.w - 10}, Vec2{22, 12}, pivot=.top_left)
+	close_rect := shape.rect_make(Vec2{panel.z - 30, panel.w - 16}, Vec2{22, 12}, pivot=.top_left)
 	if draw_structure_maker_button(close_rect, "Close") {
 		set_ui_overlay_open(UI_OVERLAY_RECIPE_MAKER, false)
 		set_ui_overlay_open(UI_OVERLAY_PAUSE, true)
@@ -2406,11 +2406,11 @@ draw_recipe_maker_ui :: proc() {
 		ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count)
 	}
 
-	draw_text(Vec2{panel.x + 12, panel.y + 56}, "L/R click slot: cycle item", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.8, 0.86, 0.95, 0.85}, drop_shadow_col=Vec4{}, scale=0.4)
-	draw_text(Vec2{panel.x + 12, panel.y + 46}, "Count:", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.44)
+	draw_text(Vec2{panel.x + 12, panel.y + 28}, "L/R click slot: cycle item", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.8, 0.86, 0.95, 0.85}, drop_shadow_col=Vec4{}, scale=0.4)
+	draw_text(Vec2{panel.x + 12, panel.y + 18}, "Count:", pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.44)
 
-	count_minus := shape.rect_make(Vec2{panel.x + 52, panel.y + 40}, Vec2{16, 12}, pivot=.bottom_left)
-	count_plus := shape.rect_make(Vec2{panel.x + 72, panel.y + 40}, Vec2{16, 12}, pivot=.bottom_left)
+	count_minus := shape.rect_make(Vec2{panel.x + 52, panel.y + 12}, Vec2{16, 12}, pivot=.bottom_left)
+	count_plus := shape.rect_make(Vec2{panel.x + 72, panel.y + 12}, Vec2{16, 12}, pivot=.bottom_left)
 	if draw_structure_maker_button(count_minus, "-") {
 		if ctx.gs.recipe_maker_selected_slot == -1 {
 			ctx.gs.recipe_maker_output.count = max(1, ctx.gs.recipe_maker_output.count-1)
@@ -2438,9 +2438,9 @@ draw_recipe_maker_ui :: proc() {
 	} else if ctx.gs.recipe_maker_selected_slot >= 0 && ctx.gs.recipe_maker_selected_slot < CRAFT_INPUT_SLOT_COUNT {
 		selected_count = ctx.gs.recipe_maker_pattern[ctx.gs.recipe_maker_selected_slot].count
 	}
-	draw_text(Vec2{panel.x + 94, panel.y + 46}, fmt.tprintf("%v", selected_count), pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
+	draw_text(Vec2{panel.x + 94, panel.y + 18}, fmt.tprintf("%v", selected_count), pivot=.bottom_left, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
 
-	row_y := panel.y + 22
+	row_y := panel.y + 42
 	prev_rect := shape.rect_make(Vec2{panel.x + 10, row_y}, Vec2{18, 12}, pivot=.bottom_left)
 	next_rect := shape.rect_make(Vec2{panel.x + 32, row_y}, Vec2{18, 12}, pivot=.bottom_left)
 	load_rect := shape.rect_make(Vec2{panel.x + 56, row_y}, Vec2{34, 12}, pivot=.bottom_left)
