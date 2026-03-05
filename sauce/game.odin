@@ -6341,9 +6341,75 @@ compute_path_detour_around_hitbox :: proc(player: ^Entity, from: Vec2, target: V
 	return best, found
 }
 
+find_path_detour_waypoint :: proc(player: ^Entity, from: Vec2, target: Vec2) -> (Vec2, bool) {
+	to_target := target - from
+	dist := linalg.length(to_target)
+	if dist <= 1.0 {
+		return {}, false
+	}
+	dir := to_target / dist
+	perp := Vec2{-dir.y, dir.x}
+
+	offsets := [6]f32{
+		ENTITY_GRID_SIZE * 0.75,
+		ENTITY_GRID_SIZE * 1.25,
+		ENTITY_GRID_SIZE * 1.75,
+		ENTITY_GRID_SIZE * 2.25,
+		ENTITY_GRID_SIZE * 2.75,
+		ENTITY_GRID_SIZE * 3.25,
+	}
+	samples := [4]f32{0.3, 0.45, 0.6, 0.75}
+	sides := [2]f32{-1, 1}
+
+	best := Vec2{}
+	best_cost: f32 = 1e30
+	found := false
+
+	for off in offsets {
+		for side in sides {
+			for t in samples {
+				base := from + dir * (dist * t)
+				cand := base + perp * (off * side)
+				if is_player_hitbox_blocked_at_pos(player, cand) {
+					continue
+				}
+				if !is_player_path_clear(player, from, cand) {
+					continue
+				}
+				if !is_player_path_clear(player, cand, target) {
+					continue
+				}
+				cost := linalg.length(cand-from) + linalg.length(target-cand)
+				if cost < best_cost {
+					best_cost = cost
+					best = cand
+					found = true
+				}
+			}
+		}
+	}
+
+	return best, found
+}
+
 set_player_move_target_with_detour :: proc(player: ^Entity, target: Vec2) {
 	player.queued_move_target = {}
 	player.has_queued_move_target = false
+
+	if is_player_path_clear(player, player.pos, target) {
+		player.move_target = target
+		player.has_move_target = true
+		return
+	}
+
+	generic_detour, generic_ok := find_path_detour_waypoint(player, player.pos, target)
+	if generic_ok {
+		player.move_target = generic_detour
+		player.has_move_target = true
+		player.queued_move_target = target
+		player.has_queued_move_target = true
+		return
+	}
 
 	blocker, on_path := find_blocker_on_path(player, player.pos, target)
 	if on_path {
