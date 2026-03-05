@@ -59,6 +59,7 @@ Game_State :: struct {
 	debug_show_durability: bool,
 	debug_show_growth: bool,
 	debug_show_grid: bool,
+	debug_show_perf_stats: bool,
 	structure_maker_cols: int,
 	structure_maker_rows: int,
 	structure_maker_tiles: [MAX_TERRAIN_STRUCTURE_ROWS][MAX_TERRAIN_STRUCTURE_COLS]int,
@@ -89,6 +90,13 @@ Game_State :: struct {
 	spawned_vegetation_chunks: [dynamic]u64,
 	terrain_structure_instances: [dynamic]Terrain_Structure_Instance,
 	unlocked_world_areas: [dynamic]u64,
+	perf_last_visible_entities: int,
+	perf_last_total_entities: int,
+	perf_last_sorted_entities: int,
+	perf_last_decor_updates_skipped: int,
+	perf_last_trees: int,
+	perf_last_bushes: int,
+	perf_last_grass: int,
 
 	scratch: struct {
 		all_entities: []Entity_Handle,
@@ -135,6 +143,9 @@ BUSH_SPAWN_TRIES_PER_CHUNK :: 520
 VEG_MIN_DIST_GRASS: f32 : 12
 VEG_MIN_DIST_TREE: f32 : 22
 VEG_MIN_DIST_BUSH: f32 : 14
+VEG_POS_JITTER_PX: f32 : 10
+DECOR_UPDATE_CULL_MARGIN: f32 : 96
+DRAW_ENTITY_CULL_MARGIN: f32 : 128
 
 UI_OVERLAY_INVENTORY : u32 : 1 << 0
 UI_OVERLAY_PAUSE : u32 : 1 << 1
@@ -1740,6 +1751,20 @@ draw_pause_menu_ui :: proc() {
 	growth_center := (growth_rect.xy + growth_rect.zw) * 0.5
 	draw_text(growth_center, growth_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
 
+	perf_rect := shape.rect_make(debug_start + Vec2{0, -90}, debug_button_size, pivot=.center_center)
+	perf_hover, perf_pressed := raw_button(perf_rect)
+	if perf_pressed {
+		ctx.gs.debug_show_perf_stats = !ctx.gs.debug_show_perf_stats
+	}
+	perf_col := Vec4{0.05, 0.05, 0.05, 0.78}
+	if perf_hover {
+		perf_col = Vec4{0.2, 0.2, 0.2, 0.85}
+	}
+	draw_rect(perf_rect, col=perf_col, outline_col=Vec4{1, 1, 1, 0.35}, z_layer=.pause_menu)
+	perf_label := ctx.gs.debug_show_perf_stats ? "Perf Stats: ON" : "Perf Stats: OFF"
+	perf_center := (perf_rect.xy + perf_rect.zw) * 0.5
+	draw_text(perf_center, perf_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{1, 1, 1, 0.9}, drop_shadow_col=Vec4{}, scale=0.5)
+
 	player := get_player()
 	area_label := "Area: n/a"
 	player_area_x, player_area_y := 0, 0
@@ -1748,9 +1773,9 @@ draw_pause_menu_ui :: proc() {
 		player_area_x, player_area_y = world_area_for_world_pos(player.pos)
 		area_label = fmt.tprintf("Area: %v,%v", player_area_x, player_area_y)
 	}
-	draw_text(Vec2{cx, cy - 74}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
+	draw_text(Vec2{cx, cy - 92}, area_label, pivot=.center_center, z_layer=.pause_menu, col=Vec4{0.9, 0.95, 1.0, 0.9}, drop_shadow_col=Vec4{}, scale=0.45)
 
-	unlock_here_rect := shape.rect_make(Vec2{cx, cy - 90}, Vec2{124, 16}, pivot=.center_center)
+	unlock_here_rect := shape.rect_make(Vec2{cx, cy - 108}, Vec2{124, 16}, pivot=.center_center)
 	unlock_here_hover, unlock_here_pressed := raw_button(unlock_here_rect)
 	unlock_here_col := Vec4{0.05, 0.08, 0.05, 0.78}
 	if unlock_here_hover {
@@ -1762,7 +1787,7 @@ draw_pause_menu_ui :: proc() {
 		_ = unlock_world_area(player_area_x, player_area_y)
 	}
 
-	unlock_adj_rect := shape.rect_make(Vec2{cx, cy - 108}, Vec2{124, 16}, pivot=.center_center)
+	unlock_adj_rect := shape.rect_make(Vec2{cx, cy - 126}, Vec2{124, 16}, pivot=.center_center)
 	unlock_adj_hover, unlock_adj_pressed := raw_button(unlock_adj_rect)
 	unlock_adj_col := Vec4{0.05, 0.08, 0.05, 0.78}
 	if unlock_adj_hover {
@@ -2135,10 +2160,17 @@ game_update :: proc() {
 	}
 
 	rebuild_scratch_helpers()
+
+	view_half := get_world_view_half_extents()
+	ctx.gs.perf_last_decor_updates_skipped = 0
 	
 	// big :update time
 	for handle in get_all_ents() {
 		e := entity_from_handle(handle)
+		if is_decorative_perf_entity(e.kind) && !is_entity_pos_in_view_with_margin(e.pos, ctx.gs.cam_pos, view_half, DECOR_UPDATE_CULL_MARGIN) {
+			ctx.gs.perf_last_decor_updates_skipped += 1
+			continue
+		}
 
 		update_entity_animation(e)
 
@@ -2254,10 +2286,37 @@ game_draw :: proc() {
 		draw_placeable_range_circle()
 		draw_placeable_preview()
 
+		view_half := get_world_view_half_extents()
+		total_entities := 0
+		visible_entities := 0
+		tree_count := 0
+		bush_count := 0
+		grass_count := 0
 		draw_order := make([dynamic]Entity_Handle, 0, len(get_all_ents()), allocator=context.temp_allocator)
 		for handle in get_all_ents() {
+			e := entity_from_handle(handle)
+			total_entities += 1
+			#partial switch e.kind {
+			case .tree_ent:
+				tree_count += 1
+			case .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+				bush_count += 1
+			case .grass_ent:
+				grass_count += 1
+			case:
+			}
+			if !is_entity_pos_in_view_with_margin(e.pos, ctx.gs.cam_pos, view_half, DRAW_ENTITY_CULL_MARGIN) {
+				continue
+			}
+			visible_entities += 1
 			append(&draw_order, handle)
 		}
+		ctx.gs.perf_last_total_entities = total_entities
+		ctx.gs.perf_last_visible_entities = visible_entities
+		ctx.gs.perf_last_sorted_entities = len(draw_order)
+		ctx.gs.perf_last_trees = tree_count
+		ctx.gs.perf_last_bushes = bush_count
+		ctx.gs.perf_last_grass = grass_count
 
 		// Draw top-to-bottom in screen space so lower-on-screen entities render in front.
 		for i in 1..<len(draw_order) {
@@ -2322,6 +2381,19 @@ game_draw :: proc() {
 			fps = int(math.round(1.0 / ctx.delta_t))
 		}
 		draw_text(Vec2{6, f32(GAME_RES_HEIGHT) - 6}, fmt.tprintf("FPS: %v", fps), pivot=.top_left, z_layer=.ui, col=Vec4{1, 1, 1, 0.85}, drop_shadow_col=Vec4{0, 0, 0, 0.75}, scale=0.45)
+		if ctx.gs.debug_show_perf_stats {
+			ms := ctx.delta_t * 1000.0
+			y := f32(GAME_RES_HEIGHT) - 18
+			draw_text(Vec2{6, y}, fmt.tprintf("Frame: %.2fms", ms), pivot=.top_left, z_layer=.ui, col=Vec4{0.92, 0.96, 1.0, 0.9}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.42)
+			y -= 10
+			draw_text(Vec2{6, y}, fmt.tprintf("Entities total/visible/sorted: %v / %v / %v", ctx.gs.perf_last_total_entities, ctx.gs.perf_last_visible_entities, ctx.gs.perf_last_sorted_entities), pivot=.top_left, z_layer=.ui, col=Vec4{0.92, 0.96, 1.0, 0.9}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.42)
+			y -= 10
+			draw_text(Vec2{6, y}, fmt.tprintf("Decor updates skipped: %v", ctx.gs.perf_last_decor_updates_skipped), pivot=.top_left, z_layer=.ui, col=Vec4{0.92, 0.96, 1.0, 0.9}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.42)
+			y -= 10
+			draw_text(Vec2{6, y}, fmt.tprintf("Trees/Bushes/Grass: %v / %v / %v", ctx.gs.perf_last_trees, ctx.gs.perf_last_bushes, ctx.gs.perf_last_grass), pivot=.top_left, z_layer=.ui, col=Vec4{0.92, 0.96, 1.0, 0.9}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.42)
+			y -= 10
+			draw_text(Vec2{6, y}, fmt.tprintf("Unlocked areas: %v  Spawned chunks: %v  Structures: %v", len(ctx.gs.unlocked_world_areas), len(ctx.gs.spawned_vegetation_chunks), len(ctx.gs.terrain_structure_instances)), pivot=.top_left, z_layer=.ui, col=Vec4{0.92, 0.96, 1.0, 0.9}, drop_shadow_col=Vec4{0, 0, 0, 0.8}, scale=0.42)
+		}
 	}
 }
 
@@ -3336,7 +3408,8 @@ spawn_trees_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 			continue
 		}
 
-		pos := Vec2{(f32(tile_x) + 0.5) * tile_size.x, (f32(tile_y) + 0.5) * tile_size.y}
+		tile_seed := u64(i64(tile_x)*73856093 + i64(tile_y)*19349663 + i64(chunk_x)*83492791 + i64(chunk_y)*2654435761)
+		pos := random_tile_world_pos_with_jitter(tile_x, tile_y, tile_size, tile_seed, VEG_POS_JITTER_PX)
 		probe := Entity{kind = .tree_ent, pos = pos}
 		tree_hitbox, ok := get_entity_hitbox_rect(probe)
 		if !ok {
@@ -3391,8 +3464,8 @@ spawn_bushes_for_chunk :: proc(chunk_x: int, chunk_y: int, tile_size: Vec2) {
 			continue
 		}
 
-		pos := Vec2{(f32(tile_x) + 0.5) * tile_size.x, (f32(tile_y) + 0.5) * tile_size.y}
 		seed := u64(i64(tile_x)*73856093 + i64(tile_y)*19349663 + i64(chunk_x)*83492791 + i64(chunk_y)*2654435761)
+		pos := random_tile_world_pos_with_jitter(tile_x, tile_y, tile_size, seed, VEG_POS_JITTER_PX)
 		kind := random_bush_kind_for_seed(seed)
 		probe := Entity{kind = kind, pos = pos}
 		hitbox, ok := get_entity_hitbox_rect(probe)
@@ -3419,6 +3492,16 @@ random_bush_kind_for_seed :: proc(seed: u64) -> Entity_Kind {
 	case 2: return .bush_3_ent
 	case: return .bush_4_ent
 	}
+}
+
+random_tile_world_pos_with_jitter :: proc(tile_x: int, tile_y: int, tile_size: Vec2, seed: u64, jitter_px: f32) -> Vec2 {
+	base := Vec2{(f32(tile_x) + 0.5) * tile_size.x, (f32(tile_y) + 0.5) * tile_size.y}
+	if jitter_px <= 0 {
+		return base
+	}
+	jx := (random01_from_seed(seed ~ 0x632BE59BD9B4E019) * 2.0 - 1.0) * jitter_px
+	jy := (random01_from_seed(seed ~ 0x8CB92BA72F3D8DD7) * 2.0 - 1.0) * jitter_px
+	return base + Vec2{jx, jy}
 }
 
 structure_overlaps_player_hitbox :: proc(st: Terrain_Structure, origin_tile_x: int, origin_tile_y: int, player_hitbox: shape.Rect) -> bool {
@@ -4190,7 +4273,7 @@ rounded_hitbox_contains_point :: proc(rect: shape.Rect, p: Vec2, corner_cut: f32
 
 should_grid_snap_entity :: proc(e: Entity) -> bool {
 	#partial switch e.kind {
-	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx, .grass_ent:
+	case .player, .item_pickup, .dagger_projectile, .movement_indicator_fx, .grass_ent, .tree_ent, .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
 		return false
 	case:
 		return true
@@ -4203,6 +4286,29 @@ apply_entity_grid_snap :: proc() {
 		if !should_grid_snap_entity(e^) do continue
 		e.pos = snap_vec2_to_grid_center(e.pos, ENTITY_GRID_SIZE)
 	}
+}
+
+get_world_view_half_extents :: proc() -> Vec2 {
+	zoom := get_camera_zoom()
+	if zoom <= 0 {
+		zoom = 1
+	}
+	return Vec2{f32(window_w) * 0.5 / zoom, f32(window_h) * 0.5 / zoom}
+}
+
+is_decorative_perf_entity :: proc(kind: Entity_Kind) -> bool {
+	#partial switch kind {
+	case .grass_ent, .bush_1_ent, .bush_2_ent, .bush_3_ent, .bush_4_ent:
+		return true
+	case:
+		return false
+	}
+}
+
+is_entity_pos_in_view_with_margin :: proc(pos: Vec2, cam_pos: Vec2, half_view: Vec2, margin: f32) -> bool {
+	if math.abs(pos.x-cam_pos.x) > half_view.x+margin do return false
+	if math.abs(pos.y-cam_pos.y) > half_view.y+margin do return false
+	return true
 }
 
 resolve_player_vs_hitboxes :: proc() {

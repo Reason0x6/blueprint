@@ -1,6 +1,9 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Added a pause-menu `Perf Stats: ON/OFF` debug toggle with live HUD diagnostics (`frame ms`, total/visible/sorted entity counts, skipped decorative updates, vegetation counts, unlocked areas, spawned chunk count, structure count) to help pinpoint FPS bottlenecks.
+- Improved natural spawn variation by jittering tree and bush spawn positions within tiles and excluding those natural entities from forced grid-center snap, producing less grid-like placement while preserving collision checks.
+- Reduced frame cost from large vegetation populations by culling offscreen decorative updates (grass/bush animation/update) and culling offscreen entities before draw-order sorting/draw submission.
 
 ## [e12befc] Optimize chunk tree and bush spawning to better meet target counts while reducing generation-time frame drops
 - Reworked chunk tree and bush generation to scan deterministic tile candidates across the whole chunk instead of fixed random-try loops, so spawn counts can be satisfied when free space exists.
