@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [bf568ce] Reflow pause-menu controls into half-width two-column button rows
 - Reflowed pause-menu controls into two columns of half-width buttons per row (debug toggles, unlock actions, and editor launch buttons) for a denser, grid-aligned layout.
 
 ## [8276004] Make Recipe Maker slot clicks select non-selected slots first and only cycle items on the currently selected slot
