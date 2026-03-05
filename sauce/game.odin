@@ -6222,13 +6222,144 @@ compute_detour_around_hitbox :: proc(player_pos: Vec2, final_target: Vec2, block
 	return detour
 }
 
+segment_intersects_rect :: proc(a: Vec2, b: Vec2, rect: shape.Rect) -> (hit: bool, t_enter: f32) {
+	d := b - a
+	t0: f32 = 0
+	t1: f32 = 1
+
+	update_axis :: proc(p, q: f32, t0: ^f32, t1: ^f32) -> bool {
+		if math.abs(p) < 0.00001 {
+			return q >= 0
+		}
+		r := q / p
+		if p < 0 {
+			if r > t1^ do return false
+			if r > t0^ do t0^ = r
+		} else {
+			if r < t0^ do return false
+			if r < t1^ do t1^ = r
+		}
+		return true
+	}
+
+	if !update_axis(-d.x, a.x-rect.x, &t0, &t1) do return false, 0
+	if !update_axis( d.x, rect.z-a.x, &t0, &t1) do return false, 0
+	if !update_axis(-d.y, a.y-rect.y, &t0, &t1) do return false, 0
+	if !update_axis( d.y, rect.w-a.y, &t0, &t1) do return false, 0
+	return true, t0
+}
+
+find_blocker_on_path :: proc(player: ^Entity, from: Vec2, to: Vec2) -> (shape.Rect, bool) {
+	best_t: f32 = 1.1
+	best := shape.Rect{}
+	found := false
+
+	player_hitbox, player_ok := get_entity_hitbox_rect(player^)
+	player_half := Vec2{4, 4}
+	if player_ok {
+		player_half = shape.rect_size(player_hitbox) * 0.5
+	}
+	margin := max(player_half.x, player_half.y) + 2
+
+	for handle in get_all_ents() {
+		e := entity_from_handle(handle)
+		if !is_valid(e^) do continue
+		if !e.blocks_player do continue
+		if e.handle.id == player.handle.id do continue
+
+		hitbox, ok := get_entity_hitbox_rect(e^)
+		if !ok do continue
+		exp := shape.rect_expand(hitbox, margin)
+		hit, t := segment_intersects_rect(from, to, exp)
+		if hit && t < best_t {
+			best_t = t
+			best = hitbox
+			found = true
+		}
+	}
+
+	return best, found
+}
+
+is_player_path_clear :: proc(player: ^Entity, from: Vec2, to: Vec2) -> bool {
+	diff := to - from
+	dist := linalg.length(diff)
+	if dist <= 0.001 {
+		return !is_player_hitbox_blocked_at_pos(player, to)
+	}
+	dir := diff / dist
+	step: f32 = max(6.0, ENTITY_GRID_SIZE * 0.25)
+	travel: f32 = 0
+	for travel <= dist {
+		p := from + dir * travel
+		if is_player_hitbox_blocked_at_pos(player, p) {
+			return false
+		}
+		travel += step
+	}
+	return !is_player_hitbox_blocked_at_pos(player, to)
+}
+
+compute_path_detour_around_hitbox :: proc(player: ^Entity, from: Vec2, target: Vec2, blocker: shape.Rect) -> (Vec2, bool) {
+	player_hitbox, ok := get_entity_hitbox_rect(player^)
+	player_half := Vec2{4, 4}
+	if ok {
+		player_half = shape.rect_size(player_hitbox) * 0.5
+	}
+	margin := max(player_half.x, player_half.y) + 8
+	cx := (blocker.x + blocker.z) * 0.5
+	cy := (blocker.y + blocker.w) * 0.5
+	cands := [4]Vec2{
+		Vec2{blocker.x - margin, math.clamp(cy, blocker.y-margin, blocker.w+margin)},
+		Vec2{blocker.z + margin, math.clamp(cy, blocker.y-margin, blocker.w+margin)},
+		Vec2{math.clamp(cx, blocker.x-margin, blocker.z+margin), blocker.y - margin},
+		Vec2{math.clamp(cx, blocker.x-margin, blocker.z+margin), blocker.w + margin},
+	}
+
+	best := Vec2{}
+	best_cost: f32 = 1e30
+	found := false
+	for cand in cands {
+		if is_player_hitbox_blocked_at_pos(player, cand) {
+			continue
+		}
+		if !is_player_path_clear(player, from, cand) {
+			continue
+		}
+		// Keep it simple: only pick candidates that also have a clear direct leg to target.
+		if !is_player_path_clear(player, cand, target) {
+			continue
+		}
+		cost := linalg.length(cand-from) + linalg.length(target-cand)
+		if cost < best_cost {
+			best_cost = cost
+			best = cand
+			found = true
+		}
+	}
+
+	return best, found
+}
+
 set_player_move_target_with_detour :: proc(player: ^Entity, target: Vec2) {
 	player.queued_move_target = {}
 	player.has_queued_move_target = false
 
-	blocker, near_blocker := get_nearby_blocker_hitbox(player.pos, 10)
+	blocker, on_path := find_blocker_on_path(player, player.pos, target)
+	if on_path {
+		detour, ok := compute_path_detour_around_hitbox(player, player.pos, target, blocker)
+		if ok {
+			player.move_target = detour
+			player.has_move_target = true
+			player.queued_move_target = target
+			player.has_queued_move_target = true
+			return
+		}
+	}
+
+	near_blocker_rect, near_blocker := get_nearby_blocker_hitbox(player.pos, 10)
 	if near_blocker {
-		detour := compute_detour_around_hitbox(player.pos, target, blocker)
+		detour := compute_detour_around_hitbox(player.pos, target, near_blocker_rect)
 		if !is_world_position_blocked_for_player(detour) {
 			player.move_target = detour
 			player.has_move_target = true

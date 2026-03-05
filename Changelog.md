@@ -1,6 +1,7 @@
 # Changelog
 
 ## [HEAD] Unreleased
+- Right-click movement now detects blocking entities that intersect the straight path segment to the destination, selects a side detour waypoint around the blocker, and then continues to the original destination when both path legs are clear.
 
 ## [9085623] Shorten pause-menu button labels and rename unlock actions to compact clearer wording
 - Shortened pause-menu button copy for denser UI labels (e.g. `HBox/Ovlp/Dura/Grow`) and renamed unlock actions to clearer compact terms (`Unlock 1`, `Unlock 3x3`).
