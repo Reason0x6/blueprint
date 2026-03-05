@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [5e35a45] Fix Recipe Maker slot layering and align its layout to a clear 2x3 input grid with single output slot
 - Fixed Recipe Maker slot rendering to draw on the pause overlay layer (`.pause_menu`) so input/output boxes are no longer hidden behind the modal dimmer.
 - Adjusted Recipe Maker grid positioning to present a clear `2 columns x 3 rows -> 1 output` editor layout.
 
