@@ -1,6 +1,8 @@
 # Changelog
 
 ## [HEAD] Unreleased
+
+## [a59e040] Fix depth-order key direction so above entities render behind and below entities render in front again
 - Fixed depth-order direction regression after sort-key optimization by mapping world feet Y to screen ordering correctly (`screen_key = -world_feet_y`), restoring expected behavior where entities above the player render behind and below render in front.
 
 ## [c202e89] Replace visible-entity draw ordering insertion sort with iterative quicksort to reduce frame-time under high entity counts
